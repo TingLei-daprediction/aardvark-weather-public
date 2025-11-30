@@ -85,13 +85,48 @@ def save_norms(out_dir, name, arr, reduce_axes):
     np.save(out_dir / f"std_{name}.npy", std)
 
 
-def convert_gridded(ds_path, var_name, transpose_order, out_path, norms_dir, norm_name, lon_tgt, lat_tgt):
+def resolve_dim_names(ds, desired):
+    mapping = {}
+    for d in desired:
+        if d == "lon":
+            for cand in ("lon", "longitude"):
+                if cand in ds.dims:
+                    mapping[d] = cand
+                    break
+        elif d == "lat":
+            for cand in ("lat", "latitude"):
+                if cand in ds.dims:
+                    mapping[d] = cand
+                    break
+        elif d == "channel":
+            for cand in ("channel", "channels", "variable", "band"):
+                if cand in ds.dims:
+                    mapping[d] = cand
+                    break
+        elif d == "time":
+            for cand in ("time",):
+                if cand in ds.dims:
+                    mapping[d] = cand
+                    break
+        else:
+            if d in ds.dims:
+                mapping[d] = d
+    missing = [d for d in desired if d not in mapping]
+    if missing:
+        raise ValueError(f"Could not resolve dims {missing} in dataset dims {ds.dims}")
+    return mapping
+
+
+def convert_gridded(ds_path, var_name, desired_order, out_path, norms_dir, norm_name, lon_tgt, lat_tgt):
     ds = xr.open_dataset(ds_path)
     ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
     v = var_name or list(ds.data_vars)[0]
-    arr = ds[v].transpose(*transpose_order).values.astype("float32")
+    dim_map = resolve_dim_names(ds, desired_order)
+    actual_order = [dim_map[d] for d in desired_order]
+    arr = ds[v].transpose(*actual_order).values.astype("float32")
     write_memmap(out_path, arr)
-    save_norms(norms_dir, norm_name, arr, reduce_axes=(0, *range(2, arr.ndim)))
+    reduce_axes = (0,) + tuple(range(2, arr.ndim))
+    save_norms(norms_dir, norm_name, arr, reduce_axes=reduce_axes)
     return arr.shape
 
 
