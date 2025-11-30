@@ -146,7 +146,7 @@ def main():
     shapes["amsua"] = convert_gridded(
         inp / "amsua_data_v1.nc",
         var_name=None,
-        transpose_order=("time", "lat", "lon", "channel"),
+        desired_order=("time", "lat", "lon", "channel"),
         out_path=out_amsua / "2007_2021_amsua.mmap",
         norms_dir=norms_dir,
         norm_name="amsua",
@@ -160,7 +160,7 @@ def main():
     shapes["amsub"] = convert_gridded(
         inp / "amsub_data_v1.nc",
         var_name=None,
-        transpose_order=("time", "lon", "lat", "channel"),
+        desired_order=("time", "lon", "lat", "channel"),
         out_path=out_amsub / "2007_2021_amsub.mmap",
         norms_dir=norms_dir,
         norm_name="amsub",
@@ -174,7 +174,7 @@ def main():
     shapes["ascat"] = convert_gridded(
         inp / "ascat_data_v1.nc",
         var_name=None,
-        transpose_order=("time", "lon", "lat", "channel"),
+        desired_order=("time", "lon", "lat", "channel"),
         out_path=out_ascat / "2007_2021_ascat.mmap",
         norms_dir=norms_dir,
         norm_name="ascat",
@@ -188,7 +188,7 @@ def main():
     shapes["hirs"] = convert_gridded(
         inp / "hirs_data_v1.nc",
         var_name=None,
-        transpose_order=("time", "lon", "lat", "channel"),
+        desired_order=("time", "lon", "lat", "channel"),
         out_path=out_hirs / "2007_2021_hirs.mmap",
         norms_dir=norms_dir,
         norm_name="hirs",
