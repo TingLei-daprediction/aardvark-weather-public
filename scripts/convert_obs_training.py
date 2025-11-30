@@ -111,9 +111,6 @@ def resolve_dim_names(ds, desired):
         else:
             if d in ds.dims:
                 mapping[d] = d
-    missing = [d for d in desired if d not in mapping]
-    if missing:
-        raise ValueError(f"Could not resolve dims {missing} in dataset dims {ds.dims}")
     return mapping
 
 
@@ -122,8 +119,19 @@ def convert_gridded(ds_path, var_name, desired_order, out_path, norms_dir, norm_
     ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
     v = var_name or list(ds.data_vars)[0]
     dim_map = resolve_dim_names(ds, desired_order)
-    actual_order = [dim_map[d] for d in desired_order]
-    arr = ds[v].transpose(*actual_order).values.astype("float32")
+
+    arr_da = ds[v]
+    # Handle missing channel dimension: stack data_vars or add singleton
+    if "channel" in desired_order and "channel" not in dim_map:
+        if var_name is None and len(ds.data_vars) > 1:
+            stacked = xr.concat([ds[name] for name in ds.data_vars], dim="channel_temp")
+            arr_da = stacked
+        else:
+            arr_da = arr_da.expand_dims({"channel_temp": [0]})
+        dim_map["channel"] = "channel_temp"
+
+    actual_order = [dim_map.get(d, d) for d in desired_order]
+    arr = arr_da.transpose(*actual_order).values.astype("float32")
     write_memmap(out_path, arr)
     reduce_axes = (0,) + tuple(range(2, arr.ndim))
     save_norms(norms_dir, norm_name, arr, reduce_axes=reduce_axes)
