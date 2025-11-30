@@ -1,0 +1,427 @@
+
+amsua_data_v1.nc:
+<xarray.Dataset>
+Dimensions:                    (time: 4746, latitude: 180, longitude: 360)
+Coordinates:
+  * time                       (time) datetime64[ns] 2007-01-02 ... 2019-12-30
+  * longitude                  (longitude) float32 0.0 1.0 2.0 ... 358.0 359.0
+  * latitude                   (latitude) float32 90.0 88.99 ... -88.99 -90.0
+Data variables: (12/13)
+    bt_channel_4               (time, latitude, longitude) float32 ...
+    bt_channel_5               (time, latitude, longitude) float32 ...
+    bt_channel_6               (time, latitude, longitude) float32 ...
+    bt_channel_7               (time, latitude, longitude) float32 ...
+    bt_channel_8               (time, latitude, longitude) float32 ...
+    bt_channel_9               (time, latitude, longitude) float32 ...
+    ...                         ...
+    bt_channel_11              (time, latitude, longitude) float32 ...
+    bt_channel_12              (time, latitude, longitude) float32 ...
+    bt_channel_13              (time, latitude, longitude) float32 ...
+    bt_channel_14              (time, latitude, longitude) float32 ...
+    minimum_view_zenith_angle  (time, latitude, longitude) float32 ...
+    obs_time                   (time, latitude, longitude) float32 ...
+  var bt_channel_4: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_5: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_6: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_7: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_8: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_9: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_10: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_11: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_12: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_13: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_14: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var minimum_view_zenith_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+
+amsub_data_v1.nc:
+<xarray.Dataset>
+Dimensions:                   (time: 4746, latitude: 180, longitude: 360)
+Coordinates:
+  * time                      (time) datetime64[ns] 2007-01-02 ... 2019-12-30
+  * longitude                 (longitude) float32 0.0 1.0 2.0 ... 358.0 359.0
+  * latitude                  (latitude) float32 90.0 88.99 ... -88.99 -90.0
+Data variables:
+    lon                       (time, latitude, longitude) float32 ...
+    lat                       (time, latitude, longitude) float32 ...
+    obs_time                  (time, latitude, longitude) float32 ...
+    orbital_mode              (time, latitude, longitude) float32 ...
+    surface_type              (time, latitude, longitude) float32 ...
+    earth_angle_of_incidence  (time, latitude, longitude) float32 ...
+    solar_zenith_angle        (time, latitude, longitude) float32 ...
+    bt_channel_1              (time, latitude, longitude) float32 ...
+    bt_channel_2              (time, latitude, longitude) float32 ...
+    bt_channel_3              (time, latitude, longitude) float32 ...
+    bt_channel_4              (time, latitude, longitude) float32 ...
+    bt_channel_5              (time, latitude, longitude) float32 ...
+  var lon: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var lat: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var orbital_mode: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var surface_type: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var earth_angle_of_incidence: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var solar_zenith_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_1: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_2: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_3: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_4: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_5: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+
+ascat_data_v1.nc:
+<xarray.Dataset>
+Dimensions:           (time: 4746, latitude: 181, longitude: 360)
+Coordinates:
+  * time              (time) datetime64[ns] 2007-01-02 2007-01-03 ... 2019-12-30
+  * longitude         (longitude) float32 0.0 1.0 2.0 3.0 ... 357.0 358.0 359.0
+  * latitude          (latitude) float32 -90.0 -89.0 -88.0 ... 88.0 89.0 90.0
+Data variables: (12/17)
+    lon               (time, latitude, longitude) float32 ...
+    lat               (time, latitude, longitude) float32 ...
+    sat_track_azi     (time, latitude, longitude) float32 ...
+    as_des_pass       (time, latitude, longitude) float32 ...
+    obs_time          (time, latitude, longitude) float32 ...
+    beam_1_sigma0     (time, latitude, longitude) float32 ...
+    ...                ...
+    beam_1_azi_angle  (time, latitude, longitude) float32 ...
+    beam_2_azi_angle  (time, latitude, longitude) float32 ...
+    beam_3_azi_angle  (time, latitude, longitude) float32 ...
+    beam_1_kp         (time, latitude, longitude) float32 ...
+    beam_2_kp         (time, latitude, longitude) float32 ...
+    beam_3_kp         (time, latitude, longitude) float32 ...
+  var lon: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var lat: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var sat_track_azi: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var as_des_pass: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_1_sigma0: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_2_sigma0: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_3_sigma0: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_1_inc_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_2_inc_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_3_inc_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_1_azi_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_2_azi_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_3_azi_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_1_kp: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_2_kp: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+  var beam_3_kp: dims=('time', 'latitude', 'longitude'), shape=(4746, 181, 360)
+
+hirs_data_v1.nc:
+<xarray.Dataset>
+Dimensions:                  (time: 4746, latitude: 180, longitude: 360)
+Coordinates:
+  * time                     (time) datetime64[ns] 2007-01-02 ... 2019-12-30
+  * longitude                (longitude) float32 0.0 1.0 2.0 ... 358.0 359.0
+  * latitude                 (latitude) float32 -90.0 -89.0 -88.0 ... 88.0 89.0
+Data variables: (12/26)
+    lon                      (time, latitude, longitude) float32 ...
+    lat                      (time, latitude, longitude) float32 ...
+    satellite_azimuth_angle  (time, latitude, longitude) float32 ...
+    solar_azimuth_angle      (time, latitude, longitude) float32 ...
+    solar_zenith_angle       (time, latitude, longitude) float32 ...
+    obs_time                 (time, latitude, longitude) float32 ...
+    ...                       ...
+    bt_channel_15            (time, latitude, longitude) float32 ...
+    bt_channel_16            (time, latitude, longitude) float32 ...
+    bt_channel_17            (time, latitude, longitude) float32 ...
+    bt_channel_18            (time, latitude, longitude) float32 ...
+    bt_channel_19            (time, latitude, longitude) float32 ...
+    bt_channel_20            (time, latitude, longitude) float32 ...
+  var lon: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var lat: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var satellite_azimuth_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var solar_azimuth_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var solar_zenith_angle: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_1: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_2: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_3: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_4: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_5: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_6: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_7: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_8: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_9: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_10: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_11: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_12: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_13: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_14: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_15: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_16: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_17: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_18: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_19: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+  var bt_channel_20: dims=('time', 'latitude', 'longitude'), shape=(4746, 180, 360)
+
+gridsat_data_v1.nc:
+<xarray.Dataset>
+Dimensions:       (time: 4746, latitude: 200, longitude: 514)
+Coordinates:
+  * time          (time) datetime64[ns] 2007-01-02 2007-01-03 ... 2019-12-30
+  * longitude     (longitude) float32 0.215 0.915 1.615 ... 358.1 358.8 359.5
+  * latitude      (latitude) float32 -69.68 -68.99 -68.28 ... 68.22 68.92 69.61
+Data variables:
+    gridsat_6p7   (time, latitude, longitude) float32 ...
+    gridsat_10p3  (time, latitude, longitude) float32 ...
+  var gridsat_6p7: dims=('time', 'latitude', 'longitude'), shape=(4746, 200, 514)
+  var gridsat_10p3: dims=('time', 'latitude', 'longitude'), shape=(4746, 200, 514)
+
+iasi_data_2007_2013_v1.nc:
+<xarray.Dataset>
+Dimensions:     (time: 2556, latitude: 181, longitude: 360)
+Coordinates:
+  * time        (time) datetime64[ns] 2007-01-02 2007-01-03 ... 2013-12-31
+  * longitude   (longitude) float32 0.0 1.0 2.0 3.0 ... 356.0 357.0 358.0 359.0
+  * latitude    (latitude) float32 -90.0 -89.0 -88.0 -87.0 ... 88.0 89.0 90.0
+Data variables: (12/52)
+    lon         (time, latitude, longitude) float32 ...
+    lat         (time, latitude, longitude) float32 ...
+    SatAzimuth  (time, latitude, longitude) float32 ...
+    SatZenith   (time, latitude, longitude) float32 ...
+    SunAzimuth  (time, latitude, longitude) float32 ...
+    SunZenith   (time, latitude, longitude) float32 ...
+    ...          ...
+    b3_pc10     (time, latitude, longitude) float32 ...
+    b3_pc11     (time, latitude, longitude) float32 ...
+    b3_pc12     (time, latitude, longitude) float32 ...
+    b3_pc13     (time, latitude, longitude) float32 ...
+    b3_pc14     (time, latitude, longitude) float32 ...
+    b3_pc15     (time, latitude, longitude) float32 ...
+  var lon: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var lat: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var SatAzimuth: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var SatZenith: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var SunAzimuth: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var SunZenith: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc1: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc2: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc3: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc4: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc5: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc6: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc7: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc8: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc9: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc10: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc11: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc12: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc13: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc14: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b1_pc15: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc1: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc2: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc3: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc4: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc5: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc6: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc7: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc8: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc9: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc10: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc11: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc12: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc13: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc14: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b2_pc15: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc1: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc2: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc3: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc4: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc5: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc6: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc7: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc8: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc9: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc10: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc11: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc12: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc13: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc14: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+  var b3_pc15: dims=('time', 'latitude', 'longitude'), shape=(2556, 181, 360)
+
+iasi_data_2014_2019_v1.nc:
+<xarray.Dataset>
+Dimensions:     (time: 2190, latitude: 181, longitude: 360)
+Coordinates:
+  * time        (time) datetime64[ns] 2014-01-01 2014-01-02 ... 2019-12-30
+  * longitude   (longitude) float32 0.0 1.0 2.0 3.0 ... 356.0 357.0 358.0 359.0
+  * latitude    (latitude) float32 -90.0 -89.0 -88.0 -87.0 ... 88.0 89.0 90.0
+Data variables: (12/52)
+    lon         (time, latitude, longitude) float32 ...
+    lat         (time, latitude, longitude) float32 ...
+    SatAzimuth  (time, latitude, longitude) float32 ...
+    SatZenith   (time, latitude, longitude) float32 ...
+    SunAzimuth  (time, latitude, longitude) float32 ...
+    SunZenith   (time, latitude, longitude) float32 ...
+    ...          ...
+    b3_pc10     (time, latitude, longitude) float32 ...
+    b3_pc11     (time, latitude, longitude) float32 ...
+    b3_pc12     (time, latitude, longitude) float32 ...
+    b3_pc13     (time, latitude, longitude) float32 ...
+    b3_pc14     (time, latitude, longitude) float32 ...
+    b3_pc15     (time, latitude, longitude) float32 ...
+  var lon: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var lat: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var SatAzimuth: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var SatZenith: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var SunAzimuth: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var SunZenith: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var obs_time: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc1: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc2: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc3: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc4: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc5: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc6: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc7: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc8: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc9: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc10: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc11: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc12: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc13: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc14: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b1_pc15: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc1: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc2: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc3: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc4: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc5: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc6: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc7: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc8: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc9: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc10: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc11: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc12: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc13: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc14: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b2_pc15: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc1: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc2: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc3: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc4: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc5: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc6: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc7: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc8: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc9: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc10: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc11: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc12: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc13: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc14: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+  var b3_pc15: dims=('time', 'latitude', 'longitude'), shape=(2190, 181, 360)
+
+igra_data_v1.nc:
+<xarray.Dataset>
+Dimensions:     (time: 4746, station_id: 1375)
+Coordinates:
+  * time        (time) datetime64[ns] 2007-01-02 2007-01-03 ... 2019-12-30
+  * station_id  (station_id) int64 0 1 2 3 4 5 ... 1369 1370 1371 1372 1373 1374
+    longitude   (station_id) float32 ...
+    latitude    (station_id) float32 ...
+Data variables: (12/24)
+    z_850       (time, station_id) float32 ...
+    t_850       (time, station_id) float32 ...
+    rh_850      (time, station_id) float32 ...
+    dpdp_850    (time, station_id) float32 ...
+    u_850       (time, station_id) float32 ...
+    v_850       (time, station_id) float32 ...
+    ...          ...
+    z_200       (time, station_id) float32 ...
+    t_200       (time, station_id) float32 ...
+    rh_200      (time, station_id) float32 ...
+    dpdp_200    (time, station_id) float32 ...
+    u_200       (time, station_id) float32 ...
+    v_200       (time, station_id) float32 ...
+  var z_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var t_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var rh_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var dpdp_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var u_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var v_850: dims=('time', 'station_id'), shape=(4746, 1375)
+  var z_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var t_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var rh_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var dpdp_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var u_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var v_700: dims=('time', 'station_id'), shape=(4746, 1375)
+  var z_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var t_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var rh_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var dpdp_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var u_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var v_500: dims=('time', 'station_id'), shape=(4746, 1375)
+  var z_200: dims=('time', 'station_id'), shape=(4746, 1375)
+  var t_200: dims=('time', 'station_id'), shape=(4746, 1375)
+  var rh_200: dims=('time', 'station_id'), shape=(4746, 1375)
+  var dpdp_200: dims=('time', 'station_id'), shape=(4746, 1375)
+  var u_200: dims=('time', 'station_id'), shape=(4746, 1375)
+  var v_200: dims=('time', 'station_id'), shape=(4746, 1375)
+
+icoads_data_v1.nc:
+<xarray.Dataset>
+Dimensions:  (time: 4746, entry: 12000)
+Coordinates:
+  * time     (time) datetime64[ns] 2007-01-02 2007-01-03 ... 2019-12-30
+  * entry    (entry) int64 0 1 2 3 4 5 6 ... 11994 11995 11996 11997 11998 11999
+Data variables:
+    lon      (time, entry) float32 ...
+    lat      (time, entry) float32 ...
+    u        (time, entry) float32 ...
+    v        (time, entry) float32 ...
+    slp      (time, entry) float32 ...
+    sst      (time, entry) float32 ...
+    tas      (time, entry) float32 ...
+  var lon: dims=('time', 'entry'), shape=(4746, 12000)
+  var lat: dims=('time', 'entry'), shape=(4746, 12000)
+  var u: dims=('time', 'entry'), shape=(4746, 12000)
+  var v: dims=('time', 'entry'), shape=(4746, 12000)
+  var slp: dims=('time', 'entry'), shape=(4746, 12000)
+  var sst: dims=('time', 'entry'), shape=(4746, 12000)
+  var tas: dims=('time', 'entry'), shape=(4746, 12000)
+
+hadisd_data_v1.nc:
+<xarray.Dataset>
+Dimensions:            (station_index_tas: 9549, time: 4746,
+                        station_index_ws: 9551, station_index_wd: 9551,
+                        station_index_psl: 8846, station_index_tds: 9447)
+Coordinates:
+  * time               (time) datetime64[ns] 2007-01-02 ... 2019-12-30
+  * station_index_tas  (station_index_tas) int64 0 1 2 3 ... 9545 9546 9547 9548
+  * station_index_ws   (station_index_ws) int64 0 1 2 3 ... 9547 9548 9549 9550
+  * station_index_wd   (station_index_wd) int64 0 1 2 3 ... 9547 9548 9549 9550
+  * station_index_psl  (station_index_psl) int64 0 1 2 3 ... 8842 8843 8844 8845
+  * station_index_tds  (station_index_tds) int64 0 1 2 3 ... 9443 9444 9445 9446
+Data variables: (12/15)
+    tas                (station_index_tas, time) float64 ...
+    ws                 (station_index_ws, time) float64 ...
+    wd                 (station_index_wd, time) float64 ...
+    psl                (station_index_psl, time) float64 ...
+    tds                (station_index_tds, time) float64 ...
+    tas_lon            (station_index_tas) float64 ...
+    ...                 ...
+    tds_lon            (station_index_tds) float64 ...
+    tas_lat            (station_index_tas) float64 ...
+    ws_lat             (station_index_ws) float64 ...
+    wd_lat             (station_index_wd) float64 ...
+    psl_lat            (station_index_psl) float64 ...
+    tds_lat            (station_index_tds) float64 ...
+  var tas: dims=('station_index_tas', 'time'), shape=(9549, 4746)
+  var ws: dims=('station_index_ws', 'time'), shape=(9551, 4746)
+  var wd: dims=('station_index_wd', 'time'), shape=(9551, 4746)
+  var psl: dims=('station_index_psl', 'time'), shape=(8846, 4746)
+  var tds: dims=('station_index_tds', 'time'), shape=(9447, 4746)
+  var tas_lon: dims=('station_index_tas',), shape=(9549,)
+  var ws_lon: dims=('station_index_ws',), shape=(9551,)
+  var wd_lon: dims=('station_index_wd',), shape=(9551,)
+  var psl_lon: dims=('station_index_psl',), shape=(8846,)
+  var tds_lon: dims=('station_index_tds',), shape=(9447,)
+  var tas_lat: dims=('station_index_tas',), shape=(9549,)
+  var ws_lat: dims=('station_index_ws',), shape=(9551,)
+  var wd_lat: dims=('station_index_wd',), shape=(9551,)
+  var psl_lat: dims=('station_index_psl',), shape=(8846,)
+  var tds_lat: dims=('station_index_tds',), shape=(9447,)
