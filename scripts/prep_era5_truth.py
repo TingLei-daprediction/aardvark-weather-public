@@ -108,15 +108,28 @@ def main():
         ds = xr.open_mfdataset(files, combine="by_coords")
         ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
 
-        # Stack variables in the given order
-        data_vars = []
+        # Stack variables in the given order, flattening levels (if present) into channels
+        channel_arrays = []
         for v in args.variables:
             if v not in ds.data_vars:
                 raise ValueError(f"Variable {v} not found in dataset for year {year}")
-            data_vars.append(ds[v].transpose("time", lat_name, lon_name).values)
-        arr = np.stack(data_vars, axis=1).astype("float32")  # (time, var, lat, lon)
-        # Reorder to (time, var, lon, lat) to match model convention
-        arr = np.transpose(arr, (0, 1, 3, 2))
+            da = ds[v]
+            if "level" in da.dims:
+                da = da.transpose("time", "level", lat_name, lon_name)
+                arr_v = da.values.astype("float32")  # (time, level, lat, lon)
+                # move to (time, level, lon, lat) and treat each level as a channel
+                arr_v = np.transpose(arr_v, (0, 1, 3, 2))
+                # reshape to (time, channels, lon, lat)
+                arr_v = arr_v.reshape(arr_v.shape[0], arr_v.shape[1], arr_v.shape[2], arr_v.shape[3])
+            else:
+                da = da.transpose("time", lat_name, lon_name)
+                arr_v = da.values.astype("float32")  # (time, lat, lon)
+                arr_v = np.transpose(arr_v, (0, 2, 1))  # (time, lon, lat)
+                arr_v = arr_v[:, np.newaxis, ...]      # add channel dim
+            channel_arrays.append(arr_v)
+
+        # Concatenate all channels: resulting shape (time, channels, lon, lat)
+        arr = np.concatenate(channel_arrays, axis=1)
 
         memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_6_{year}.memmap"
         print(f"[INFO] Writing {memmap_path} with shape {arr.shape}")

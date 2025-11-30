@@ -138,6 +138,22 @@ def convert_gridded(ds_path, var_name, desired_order, out_path, norms_dir, norm_
     return arr.shape
 
 
+def stack_vars(ds, patterns):
+    names = []
+    for pat in patterns:
+        names.extend([n for n in ds.data_vars if n.startswith(pat)])
+    if not names:
+        names = list(ds.data_vars)
+    # Deduplicate, preserve order
+    seen = set()
+    ordered = []
+    for n in names:
+        if n not in seen:
+            ordered.append(n)
+            seen.add(n)
+    return ordered
+
+
 def main():
     args = parse_args()
     inp = Path(args.input_dir)
@@ -151,65 +167,71 @@ def main():
     # AMSU-A
     out_amsua = out / "amsua"
     out_amsua.mkdir(parents=True, exist_ok=True)
-    shapes["amsua"] = convert_gridded(
-        inp / "amsua_data_v1.nc",
-        var_name=None,
-        desired_order=("time", "lat", "lon", "channel"),
-        out_path=out_amsua / "2007_2021_amsua.mmap",
-        norms_dir=norms_dir,
-        norm_name="amsua",
-        lon_tgt=lon_tgt,
-        lat_tgt=lat_tgt,
-    )
+    ds = xr.open_dataset(inp / "amsua_data_v1.nc")
+    ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+    chan_names = stack_vars(ds, ["bt_channel_"])
+    arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lat_name, lon_name, "channel_temp").values.astype("float32")
+    write_memmap(out_amsua / "2007_2021_amsua.mmap", arr)
+    save_norms(norms_dir, "amsua", arr, reduce_axes=(0, 2, 3))
+    shapes["amsua"] = arr.shape
 
     # AMSU-B/MHS
     out_amsub = out / "amsub_mhs"
     out_amsub.mkdir(parents=True, exist_ok=True)
-    shapes["amsub"] = convert_gridded(
-        inp / "amsub_data_v1.nc",
-        var_name=None,
-        desired_order=("time", "lon", "lat", "channel"),
-        out_path=out_amsub / "2007_2021_amsub.mmap",
-        norms_dir=norms_dir,
-        norm_name="amsub",
-        lon_tgt=lon_tgt,
-        lat_tgt=lat_tgt,
-    )
+    ds = xr.open_dataset(inp / "amsub_data_v1.nc")
+    ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+    chan_names = stack_vars(ds, ["bt_channel_"])
+    arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
+    write_memmap(out_amsub / "2007_2021_amsub.mmap", arr)
+    save_norms(norms_dir, "amsub", arr, reduce_axes=(0, 2, 3))
+    shapes["amsub"] = arr.shape
 
     # ASCAT
     out_ascat = out / "ascat"
     out_ascat.mkdir(parents=True, exist_ok=True)
-    shapes["ascat"] = convert_gridded(
-        inp / "ascat_data_v1.nc",
-        var_name=None,
-        desired_order=("time", "lon", "lat", "channel"),
-        out_path=out_ascat / "2007_2021_ascat.mmap",
-        norms_dir=norms_dir,
-        norm_name="ascat",
-        lon_tgt=lon_tgt,
-        lat_tgt=lat_tgt,
-    )
+    ds = xr.open_dataset(inp / "ascat_data_v1.nc")
+    ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+    chan_names = [
+        "beam_1_sigma0",
+        "beam_2_sigma0",
+        "beam_3_sigma0",
+        "beam_1_inc_angle",
+        "beam_2_inc_angle",
+        "beam_3_inc_angle",
+        "beam_1_azi_angle",
+        "beam_2_azi_angle",
+        "beam_3_azi_angle",
+        "beam_1_kp",
+        "beam_2_kp",
+        "beam_3_kp",
+        "sat_track_azi",
+        "as_des_pass",
+        "obs_time",
+    ]
+    chan_names = [n for n in chan_names if n in ds.data_vars]
+    arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
+    write_memmap(out_ascat / "2007_2021_ascat.mmap", arr)
+    save_norms(norms_dir, "ascat", arr, reduce_axes=(0, 2, 3))
+    shapes["ascat"] = arr.shape
 
     # HIRS
     out_hirs = out / "hirs"
     out_hirs.mkdir(parents=True, exist_ok=True)
-    shapes["hirs"] = convert_gridded(
-        inp / "hirs_data_v1.nc",
-        var_name=None,
-        desired_order=("time", "lon", "lat", "channel"),
-        out_path=out_hirs / "2007_2021_hirs.mmap",
-        norms_dir=norms_dir,
-        norm_name="hirs",
-        lon_tgt=lon_tgt,
-        lat_tgt=lat_tgt,
-    )
+    ds = xr.open_dataset(inp / "hirs_data_v1.nc")
+    ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+    chan_names = stack_vars(ds, ["bt_channel_"])
+    arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
+    write_memmap(out_hirs / "2007_2021_hirs.mmap", arr)
+    save_norms(norms_dir, "hirs", arr, reduce_axes=(0, 2, 3))
+    shapes["hirs"] = arr.shape
 
     # GRIDSAT (assume dims: time, channel, x, y)
     out_sat = out / "gridsat"
     out_sat.mkdir(parents=True, exist_ok=True)
     ds_sat = xr.open_dataset(inp / "gridsat_data_v1.nc")
     v_sat = list(ds_sat.data_vars)[0]
-    arr_sat = ds_sat[v_sat].transpose("time", "channel", "x", "y").values.astype("float32")
+    chans = list(ds_sat.data_vars)
+    arr_sat = xr.concat([ds_sat[n] for n in chans], dim="channel_temp").transpose("time", "channel_temp", "longitude", "latitude").values.astype("float32")
     write_memmap(out_sat / "gridsat_data.mmap", arr_sat)
     save_norms(norms_dir, "sat", arr_sat, reduce_axes=(0, 2, 3))
     shapes["gridsat"] = arr_sat.shape
@@ -219,22 +241,29 @@ def main():
     ds_iasi2 = xr.open_dataset(inp / "iasi_data_2014_2019_v1.nc")
     ds_iasi = xr.concat([ds_iasi1, ds_iasi2], dim="time")
     ds_iasi, lon_name, lat_name = normalize_and_reindex(ds_iasi, lon_tgt, lat_tgt)
-    v_iasi = list(ds_iasi.data_vars)[0]
-    arr_iasi = ds_iasi[v_iasi].transpose("time", "lon", "lat", "channel").values.astype("float32")
+    chan_names = stack_vars(ds_iasi, ["b1_pc", "b2_pc", "b3_pc"])
+    arr_iasi = xr.concat([ds_iasi[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out / "2007_2021_iasi_subset.mmap", arr_iasi)
     save_norms(norms_dir, "iasi", arr_iasi, reduce_axes=(0, 2, 3))
     shapes["iasi"] = arr_iasi.shape
 
     # IGRA (station)
     ds_igra = xr.open_dataset(inp / "igra_data_v1.nc")
-    v_igra = list(ds_igra.data_vars)[0]
-    arr_igra = ds_igra[v_igra].transpose("time", "level", "station").values.astype("float32")
+    level_order = ["850", "700", "500", "200"]
+    fields = ["z", "t", "rh", "dpdp", "u", "v"]
+    chan_names = []
+    for lev in level_order:
+        for f in fields:
+            name = f"{f}_{lev}"
+            if name in ds_igra.data_vars:
+                chan_names.append(name)
+    arr_igra = xr.concat([ds_igra[n] for n in chan_names], dim="channel_temp").transpose("time", "channel_temp", "station_id").values.astype("float32")
     out_igra = out / "igra"
     out_igra.mkdir(parents=True, exist_ok=True)
     write_memmap(out_igra / "1999_2021_igra_y.mmap", arr_igra)
     # coords
-    lon_igra = (ds_igra["station_lon"].values + 360) % 360
-    lat_igra = ds_igra["station_lat"].values
+    lon_igra = (ds_igra["longitude"].values + 360) % 360 if "longitude" in ds_igra else (ds_igra["station_lon"].values + 360) % 360
+    lat_igra = ds_igra["latitude"].values if "latitude" in ds_igra else ds_igra["station_lat"].values
     coords_igra = np.stack([lon_igra, lat_igra], axis=-1).astype("float32")
     write_memmap(out_igra / "1999_2021_igra_x.mmap", coords_igra)
     save_norms(norms_dir, "igra", arr_igra, reduce_axes=(0, 2))
@@ -242,13 +271,13 @@ def main():
 
     # ICOADS (station)
     ds_ic = xr.open_dataset(inp / "icoads_data_v1.nc")
-    v_ic = list(ds_ic.data_vars)[0]
-    arr_ic = ds_ic[v_ic].transpose("time", "var", "ship").values.astype("float32")
+    chan_names = [n for n in ("u", "v", "slp", "sst", "tas") if n in ds_ic.data_vars]
+    arr_ic = xr.concat([ds_ic[n] for n in chan_names], dim="channel_temp").transpose("time", "channel_temp", "entry").values.astype("float32")
     out_ic = out / "icoads"
     out_ic.mkdir(parents=True, exist_ok=True)
     write_memmap(out_ic / "1999_2021_icoads_y.mmap", arr_ic)
-    lon_ic = (ds_ic["ship_lon"].values + 360) % 360
-    lat_ic = ds_ic["ship_lat"].values
+    lon_ic = (ds_ic["lon"].values + 360) % 360 if "lon" in ds_ic else (ds_ic["ship_lon"].values + 360) % 360
+    lat_ic = ds_ic["lat"].values if "lat" in ds_ic else ds_ic["ship_lat"].values
     coords_ic = np.stack([lon_ic, lat_ic], axis=-1).astype("float32")
     write_memmap(out_ic / "1999_2021_icoads_x.mmap", coords_ic)
     save_norms(norms_dir, "icoads", arr_ic, reduce_axes=(0, 2))
@@ -256,23 +285,28 @@ def main():
 
     # HADISD (per variable)
     ds_h = xr.open_dataset(inp / "hadisd_data_v1.nc")
-    had_vars = ["tas", "tds", "psl", "u", "v"]
+    had_var_map = {"tas": "tas", "tds": "tds", "psl": "psl", "ws": "u", "wd": "v"}
     out_h = out / "hadisd_processed"
     out_h.mkdir(parents=True, exist_ok=True)
-    for var in had_vars:
-        if var not in ds_h.data_vars:
-            print(f"[WARN] {var} not in hadisd_data_v1.nc; skipping")
+    for src_var, out_name in had_var_map.items():
+        if src_var not in ds_h.data_vars:
+            print(f"[WARN] {src_var} not in hadisd_data_v1.nc; skipping")
             continue
-        arr_h = ds_h[var].transpose("time", "station").values.astype("float32")
-        write_memmap(out_h / f"{var}_vals_train.memmap", arr_h)
-        lon_h = (ds_h["lon"].values + 360) % 360
-        lat_h = ds_h["lat"].values
-        alt_h = ds_h["alt"].values if "alt" in ds_h else np.zeros_like(lon_h)
-        np.save(out_h / f"{var}_lon_train.npy", lon_h.astype("float32"))
-        np.save(out_h / f"{var}_lat_train.npy", lat_h.astype("float32"))
-        np.save(out_h / f"{var}_alt_train.npy", alt_h.astype("float32"))
-        save_norms(norms_dir, f"hadisd_{var}", arr_h, reduce_axes=(0,))
-        shapes[f"hadisd_{var}"] = arr_h.shape
+        # Expect dims (station_index_*, time); transpose to (time, station)
+        station_dim = [d for d in ds_h[src_var].dims if d != "time"][0]
+        arr_h = ds_h[src_var].transpose("time", station_dim).values.astype("float32")
+        write_memmap(out_h / f"{out_name}_vals_train.memmap", arr_h)
+        lon_name = f"{src_var}_lon" if f"{src_var}_lon" in ds_h else "lon"
+        lat_name = f"{src_var}_lat" if f"{src_var}_lat" in ds_h else "lat"
+        lon_h = (ds_h[lon_name].values + 360) % 360
+        lat_h = ds_h[lat_name].values
+        alt_name = f"{src_var}_alt" if f"{src_var}_alt" in ds_h else ("alt" if "alt" in ds_h else None)
+        alt_h = ds_h[alt_name].values if alt_name else np.zeros_like(lon_h)
+        np.save(out_h / f"{out_name}_lon_train.npy", lon_h.astype("float32"))
+        np.save(out_h / f"{out_name}_lat_train.npy", lat_h.astype("float32"))
+        np.save(out_h / f"{out_name}_alt_train.npy", alt_h.astype("float32"))
+        save_norms(norms_dir, f"hadisd_{out_name}", arr_h, reduce_axes=(0,))
+        shapes[f"hadisd_{out_name}"] = arr_h.shape
 
     print("[INFO] Completed conversions. Shapes:")
     for k, v in shapes.items():
