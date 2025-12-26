@@ -74,6 +74,15 @@ def main(rank, world_size, output_dir, args):
     era5_mode = args.era5_mode
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port)
+#clt
+    if torch.cuda.is_available() :
+        device_name = "cuda"
+        torch.set_float32_matmul_precision(
+            "high"
+        )  # Allows using Tensor Cores on A100s
+    else:
+        device_name = "cpu"
+
 
     # Instantiate loss function
     if args.loss == "lw_rmse":
@@ -95,7 +104,7 @@ def main(rank, world_size, output_dir, args):
     # Case 1: training encoder
     if args.mode == "assimilation":
         train_dataset = WeatherDatasetAssimilation(
-            device="cuda",
+            device=device_name,
             hadisd_mode="train",
             start_date="2007-01-02",
             end_date="2017-12-31",
