@@ -47,6 +47,11 @@ def parse_args():
         help="Years to process (e.g., 2007 2008 ...)",
     )
     p.add_argument(
+        "--pattern",
+        default="era5_*_{year}_*.nc",
+        help="Glob pattern for files in input_dir; use {year} placeholder (default: era5_*_{year}_*.nc)",
+    )
+    p.add_argument(
         "--grid_dir",
         default="data/grid_lon_lat",
         help="Directory containing era5_x_1.npy and era5_y_1.npy",
@@ -98,9 +103,8 @@ def main():
     count = 0
 
     for year in args.years:
-        files = sorted(
-            glob.glob(os.path.join(args.input_dir, f"era5_single_1p5deg_{year}_*.nc"))
-        )
+        glob_pat = args.pattern.format(year=year)
+        files = sorted(glob.glob(os.path.join(args.input_dir, glob_pat)))
         if not files:
             print(f"[WARN] No files for year {year}, skipping.")
             continue
