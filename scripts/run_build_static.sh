@@ -3,14 +3,14 @@
 # Edit paths/years/vars as needed.
 
 set -euo pipefail
-
-DATA_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data"
-GRID_DIR="data/grid_lon_lat"
+ROOT_DIR=/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/
+DATA_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
+GRID_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/grid_lon_lat"
 
 # 1) Build elev_vars_1.npy from a file containing geopotential + land_sea_mask
 STATIC_FILE="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/static/era5_static_1p5deg.nc"
 
-python scripts/build_elev_vars.py \
+python ${ROOT_DIR}/scripts/build_elev_vars.py \
   --input_file "${STATIC_FILE}" \
   --output_dir "${DATA_DIR}" \
   --grid_dir "${GRID_DIR}" \
@@ -18,7 +18,7 @@ python scripts/build_elev_vars.py \
   --lsm_var land_sea_mask
 
 # 2) Build climatology_data.mmap from ERA5 4u memmaps
-python scripts/build_climatology.py \
+python ${ROOT_DIR}/scripts/build_climatology.py \
   --data_dir "${DATA_DIR}" \
   --era5_mode 4u \
   --res 1 \
