@@ -63,10 +63,13 @@ def main():
 
     z = ds[args.geopotential_var]
     lsm = ds[args.lsm_var]
-    if "time" in z.dims:
-        z = z.isel(time=0)
-    if "time" in lsm.dims:
-        lsm = lsm.isel(time=0)
+    # Drop any non-lat/lon singleton dims (e.g., valid_time, number)
+    for dim in list(z.dims):
+        if dim not in (lat_name, lon_name):
+            z = z.isel({dim: 0})
+    for dim in list(lsm.dims):
+        if dim not in (lat_name, lon_name):
+            lsm = lsm.isel({dim: 0})
 
     orog = (z.transpose(lat_name, lon_name).values.astype("float32")) / G
     lsm = lsm.transpose(lat_name, lon_name).values.astype("float32")
