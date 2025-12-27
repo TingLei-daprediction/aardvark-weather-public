@@ -49,10 +49,17 @@ def main():
     ds = xr.open_dataset(args.input_file)
     ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
 
+    # Allow common ERA5 short names (z, lsm) as fallbacks
     if args.geopotential_var not in ds.data_vars:
-        raise ValueError(f"Missing geopotential var: {args.geopotential_var}")
+        if "z" in ds.data_vars:
+            args.geopotential_var = "z"
+        else:
+            raise ValueError(f"Missing geopotential var: {args.geopotential_var}")
     if args.lsm_var not in ds.data_vars:
-        raise ValueError(f"Missing land-sea mask var: {args.lsm_var}")
+        if "lsm" in ds.data_vars:
+            args.lsm_var = "lsm"
+        else:
+            raise ValueError(f"Missing land-sea mask var: {args.lsm_var}")
 
     z = ds[args.geopotential_var]
     lsm = ds[args.lsm_var]
