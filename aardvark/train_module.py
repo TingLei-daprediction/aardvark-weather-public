@@ -117,7 +117,7 @@ def main(rank, world_size, output_dir, args):
             two_frames=bool(args.two_frames),
         )
         val_dataset = WeatherDatasetAssimilation(
-            device="cuda",
+            device=device_name,
             hadisd_mode="train",
             start_date="2019-01-01",
             end_date="2019-12-31",
@@ -134,7 +134,7 @@ def main(rank, world_size, output_dir, args):
     elif args.mode == "forecast":
         if args.ic == "aardvark":
             train_dataset = FineTuneForecastLoaderNew(
-                device="cuda",
+                device=device_name,
                 mode="train",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -145,7 +145,7 @@ def main(rank, world_size, output_dir, args):
                 random_lt=True,
             )
             val_dataset = FineTuneForecastLoaderNew(
-                device="cuda",
+                device=device_name,
                 mode="val",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -156,7 +156,7 @@ def main(rank, world_size, output_dir, args):
             )
         else:
             train_dataset = ForecastLoader(
-                device="cuda",
+                device=device_name,
                 mode="train",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -167,7 +167,7 @@ def main(rank, world_size, output_dir, args):
                 random_lt=False,
             )
             val_dataset = ForecastLoader(
-                device="cuda",
+                device=device_name,
                 mode="val",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -187,7 +187,7 @@ def main(rank, world_size, output_dir, args):
             lead_time=args.lead_time,
             hadisd_var=args.var,
             mode="train",
-            device="cuda",
+            device=device_name,
             forecast_path=None,
         )
 
@@ -197,7 +197,7 @@ def main(rank, world_size, output_dir, args):
             lead_time=args.lead_time,
             hadisd_var=args.var,
             mode="train",
-            device="cuda",
+            device=device_name,
             forecast_path=None,
         )
 
@@ -215,7 +215,7 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
             int_channels=args.int_channels,
-            device="cuda",
+            device=device_name,
             res=args.res,
             decoder=args.decoder,
             mode=args.mode,
@@ -226,7 +226,7 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
             int_channels=args.int_channels,
-            device="cuda",
+            device=device_name,
             res=args.res,
             gnp=bool(0),
             decoder=args.decoder,
