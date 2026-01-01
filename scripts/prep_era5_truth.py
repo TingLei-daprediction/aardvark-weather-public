@@ -6,7 +6,7 @@ Inputs:
   - Target grid files: data/grid_lon_lat/era5_x_1.npy and era5_y_1.npy (lon/lat in degrees).
 
 Outputs (per year):
-  - <output_dir>/era5/era5_sfc_1_6_<year>.memmap  (or other mode name via --era5_mode)
+  - <output_dir>/era5/era5_4u_1_6_<year>.memmap  (or other mode name via --era5_mode)
   - <output_dir>/norm_factors/mean_<mode>_1.npy and std_<mode>_1.npy (per-channel mean/std)
 
 Notes:
@@ -30,7 +30,7 @@ def parse_args():
     p.add_argument("--output_dir", required=True, help="Base output dir for memmaps/norms")
     p.add_argument(
         "--era5_mode",
-        default="sfc",
+        default="4u",
         help="Mode name for output files (e.g., sfc, 4u, 13u)",
     )
     p.add_argument(
