@@ -29,7 +29,7 @@ sys.path.append("../npw/data")
 torch.set_float32_matmul_precision("medium")
 
 
-def ddp_setup(rank, world_size, master_port):
+def ddp_setup(rank, world_size, master_port, backend):
     """
     Args:
         rank: Unique identifier of each process
@@ -38,8 +38,9 @@ def ddp_setup(rank, world_size, master_port):
 
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = master_port
-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
+    init_process_group(backend=backend, rank=rank, world_size=world_size)
+    if backend == "nccl":
+        torch.cuda.set_device(rank)
 
 
 def start_date(name):
@@ -73,7 +74,7 @@ def main(rank, world_size, output_dir, args):
     lead_time = args.lead_time
     era5_mode = args.era5_mode
     weights_dir = args.weights_dir
-    ddp_setup(rank, world_size, master_port)
+    ddp_setup(rank, world_size, master_port, args.backend)
 #clt
     if torch.cuda.is_available() :
         device_name = "cuda"
@@ -293,6 +294,8 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epoch", type=int, default=50)
     parser.add_argument("--master_port", default="12345")
+    parser.add_argument("--backend", default="nccl", help="DDP backend (nccl or gloo)")
+    parser.add_argument("--world_size", type=int, default=None, help="Override world size")
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--lead_time", type=int)
     parser.add_argument("--era5_mode", default="4u")
@@ -320,5 +323,8 @@ if __name__ == "__main__":
     with open(output_dir + "/config.pkl", "wb") as f:
         pickle.dump(vars(args), f)
 
-    world_size = torch.cuda.device_count()
-    mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
+    world_size = args.world_size or torch.cuda.device_count()
+    if args.backend == "gloo" and world_size == 1:
+        main(0, 1, output_dir, args)
+    else:
+        mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
