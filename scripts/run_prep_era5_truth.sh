@@ -4,6 +4,7 @@
 
 set -euo pipefail
 
+scriptdir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts"
 OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data"
 GRID_DIR="data/grid_lon_lat"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
@@ -33,7 +34,7 @@ VARS_PL=(
 )
 
 # Run surface
-python scripts/prep_era5_truth.py \
+python ${scriptdir}/prep_era5_truth.py \
   --input_dir "${INPUT_DIR_SFC}" \
   --output_dir "${OUTPUT_DIR}" \
   --era5_mode "${ERA5_MODE_SFC}" \

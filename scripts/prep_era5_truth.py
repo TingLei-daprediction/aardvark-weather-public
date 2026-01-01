@@ -53,7 +53,7 @@ def parse_args():
     )
     p.add_argument(
         "--grid_dir",
-        default="data/grid_lon_lat",
+        default="../data/grid_lon_lat",
         help="Directory containing era5_x_1.npy and era5_y_1.npy",
     )
     return p.parse_args()
