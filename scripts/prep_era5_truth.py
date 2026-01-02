@@ -77,13 +77,14 @@ def normalize_and_reindex(ds, lon_tgt, lat_tgt):
     # Normalize lon to 0–360 and sort
     lon_name = "lon" if "lon" in ds.coords else "longitude"
     lat_name = "lat" if "lat" in ds.coords else "latitude"
+    time_name = "time" if "time" in ds.coords else "valid_time"
     ds = ds.assign_coords({lon_name: ((ds[lon_name] + 360) % 360)}).sortby(lon_name)
     # Flip lat to 90 -> -90 if needed
     if ds[lat_name][0] < ds[lat_name][-1]:
         ds = ds.reindex({lat_name: list(reversed(ds[lat_name]))})
     # Reindex to target grid (nearest neighbor, no fill)
     ds = ds.reindex({lon_name: lon_tgt, lat_name: lat_tgt}, method="nearest")
-    return ds, lon_name, lat_name
+    return ds, time_name, lon_name, lat_name
 
 
 def write_memmap(year, arr, memmap_path):
@@ -119,7 +120,7 @@ def main():
             continue
 
         ds = xr.open_mfdataset(files, combine="by_coords")
-        ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+        ds, time_name, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
 
         # Stack variables in the given order, flattening levels (if present) into channels
         channel_arrays = []
@@ -131,14 +132,14 @@ def main():
                 )
             da = ds[v_in]
             if "level" in da.dims:
-                da = da.transpose("time", "level", lat_name, lon_name)
+                da = da.transpose(time_name, "level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
                 arr_v = np.transpose(arr_v, (0, 1, 3, 2))
                 # reshape to (time, channels, lon, lat)
                 arr_v = arr_v.reshape(arr_v.shape[0], arr_v.shape[1], arr_v.shape[2], arr_v.shape[3])
             else:
-                da = da.transpose("time", lat_name, lon_name)
+                da = da.transpose(time_name, lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, lat, lon)
                 arr_v = np.transpose(arr_v, (0, 2, 1))  # (time, lon, lat)
                 arr_v = arr_v[:, np.newaxis, ...]      # add channel dim
