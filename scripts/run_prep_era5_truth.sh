@@ -5,8 +5,8 @@
 set -euo pipefail
 
 scriptdir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts"
-OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data"
-GRID_DIR="data/grid_lon_lat"
+OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
+GRID_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/grid_lon_lat"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
 
 # --- Surface/single-level fields (example) ---
@@ -42,13 +42,13 @@ python ${scriptdir}/prep_era5_truth.py \
   --years "${YEARS[@]}" \
   --grid_dir "${GRID_DIR}"
 
-# Run pressure-level (uncomment when pressure-level NetCDFs are present)
-# python scripts/prep_era5_truth.py \
-#   --input_dir "${INPUT_DIR_PL}" \
-#   --output_dir "${OUTPUT_DIR}" \
-#   --era5_mode "${ERA5_MODE_PL}" \
-#   --variables "${VARS_PL[@]}" \
-#   --years "${YEARS[@]}" \
-#   --grid_dir "${GRID_DIR}"
+# Run pressure-level
+python ${scriptdir}/prep_era5_truth.py \
+  --input_dir "${INPUT_DIR_PL}" \
+  --output_dir "${OUTPUT_DIR}" \
+  --era5_mode "${ERA5_MODE_PL}" \
+  --variables "${VARS_PL[@]}" \
+  --years "${YEARS[@]}" \
+  --grid_dir "${GRID_DIR}"
 
 echo "Done. ERA5 memmaps are under ${OUTPUT_DIR}/era5 and norms under ${OUTPUT_DIR}/norm_factors."
