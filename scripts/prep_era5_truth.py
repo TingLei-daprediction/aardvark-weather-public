@@ -136,7 +136,11 @@ def main():
                     f"Variable {v} (mapped to {v_in}) not found in dataset for year {year}"
                 )
             da = ds[v_in]
-            if "pressure_level" in da.dims:
+            if args.era5_mode == "4u":
+                if "pressure_level" not in da.dims:
+                    raise ValueError(
+                        f"Expected pressure_level in dims for {v_in}, got {da.dims}"
+                    )
                 da = da.transpose(time_name, "pressure_level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
