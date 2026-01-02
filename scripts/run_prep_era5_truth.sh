@@ -2,11 +2,12 @@
 # Prepare ERA5 memmaps and norms on the target grid.
 # Edit paths and variable list to match what you downloaded and what your training expects.
 
+root_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 set -euo pipefail
 
 scriptdir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts"
 OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
-GRID_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/grid_lon_lat"
+GRID_DIR="${root_dir}/data/grid_lon_lat"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
 
 # --- Surface/single-level fields (example) ---
