@@ -97,6 +97,15 @@ def main():
     memmap_dir, norms_dir = ensure_dirs(args.output_dir)
     lon_tgt, lat_tgt = load_target_grid(args.grid_dir)
 
+    name_map = {
+        "2m_temperature": "t2m",
+        "2m_dewpoint_temperature": "d2m",
+        "10m_u_component_of_wind": "u10",
+        "10m_v_component_of_wind": "v10",
+        "mean_sea_level_pressure": "msl",
+        "surface_pressure": "sp",
+    }
+
     # Accumulate for mean/std across all years
     sum_channels = None
     sumsq_channels = None
@@ -115,9 +124,12 @@ def main():
         # Stack variables in the given order, flattening levels (if present) into channels
         channel_arrays = []
         for v in args.variables:
-            if v not in ds.data_vars:
-                raise ValueError(f"Variable {v} not found in dataset for year {year}")
-            da = ds[v]
+            v_in = name_map.get(v, v)
+            if v_in not in ds.data_vars:
+                raise ValueError(
+                    f"Variable {v} (mapped to {v_in}) not found in dataset for year {year}"
+                )
+            da = ds[v_in]
             if "level" in da.dims:
                 da = da.transpose("time", "level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
