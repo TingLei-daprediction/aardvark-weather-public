@@ -136,8 +136,8 @@ def main():
                     f"Variable {v} (mapped to {v_in}) not found in dataset for year {year}"
                 )
             da = ds[v_in]
-            if "level" in da.dims:
-                da = da.transpose(time_name, "level", lat_name, lon_name)
+            if "pressure_level" in da.dims:
+                da = da.transpose(time_name, "pressure_level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
                 arr_v = np.transpose(arr_v, (0, 1, 3, 2))
