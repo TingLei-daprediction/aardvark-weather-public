@@ -105,6 +105,11 @@ def main():
         "10m_v_component_of_wind": "v10",
         "mean_sea_level_pressure": "msl",
         "surface_pressure": "sp",
+        "geopotential": "z",
+        "temperature": "t",
+        "specific_humidity": "q",
+        "u_component_of_wind": "u",
+        "v_component_of_wind": "v",
     }
 
     # Accumulate for mean/std across all years
