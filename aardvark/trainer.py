@@ -61,10 +61,44 @@ class DDPTrainer:
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
 
+<<<<<<< ours
         self.losses = []
         self.train_losses = []
         self.maes = []
 
+    def _load_weights_if_provided(self, weights_path):
+        if not weights_path:
+            return
+        if not os.path.exists(weights_path):
+            print(f"Warning: weights path not found, skipping load: {weights_path}")
+            return
+        if os.path.isdir(weights_path):
+            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            return
+
+        checkpoint = torch.load(weights_path, map_location="cpu")
+        if isinstance(checkpoint, dict):
+            state_dict = (
+                checkpoint.get("model_state_dict")
+                or checkpoint.get("state_dict")
+                or checkpoint
+            )
+        else:
+            state_dict = checkpoint
+
+        if isinstance(state_dict, dict) and state_dict:
+            keys = list(state_dict.keys())
+            if keys and keys[0].startswith("module."):
+                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+
+        self.model.load_state_dict(state_dict, strict=False)
+
+=======
+        self.losses = []
+        self.train_losses = []
+        self.maes = []
+
+>>>>>>> theirs
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
 
@@ -334,10 +368,44 @@ class DDPTrainerE2E:
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
 
+<<<<<<< ours
         self.losses = []
         self.train_losses = []
 
         self.maes = []
+
+    def _load_weights_if_provided(self, weights_path):
+        if not weights_path:
+            return
+        if not os.path.exists(weights_path):
+            print(f"Warning: weights path not found, skipping load: {weights_path}")
+            return
+        if os.path.isdir(weights_path):
+            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            return
+
+        checkpoint = torch.load(weights_path, map_location="cpu")
+        if isinstance(checkpoint, dict):
+            state_dict = (
+                checkpoint.get("model_state_dict")
+                or checkpoint.get("state_dict")
+                or checkpoint
+            )
+        else:
+            state_dict = checkpoint
+
+        if isinstance(state_dict, dict) and state_dict:
+            keys = list(state_dict.keys())
+            if keys and keys[0].startswith("module."):
+                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+
+        self.model.load_state_dict(state_dict, strict=False)
+=======
+        self.losses = []
+        self.train_losses = []
+
+        self.maes = []
+>>>>>>> theirs
 
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
