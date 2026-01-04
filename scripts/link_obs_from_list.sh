@@ -5,9 +5,10 @@
 
 set -euo pipefail
 
-PROCESSED_OBS_DIR="/path/to/processed_obs"
-DATA_PATH="/path/to/data_path"
-LIST_FILE="/path/to/av-obs-list.txt"
+PROCESSED_OBS_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/emc-aardvark-data"
+DATA_PATH="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/"
+LIST_FILE="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-debug-files/av-obs-list.txt"
+ls -l $LIST_FILE
 
 if [[ -z "${PROCESSED_OBS_DIR}" || -z "${DATA_PATH}" || -z "${LIST_FILE}" ]]; then
   echo "ERROR: edit PROCESSED_OBS_DIR, DATA_PATH, and LIST_FILE in this script." >&2
