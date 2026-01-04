@@ -40,16 +40,16 @@ class ConvCNPWeather(nn.Module):
         self.out_channels = out_channels
         self.int_channels = int_channels
         self.decoder = decoder
-        self.int_x = 256
-        self.int_y = 128
+        self.int_x = 256  # clt_hard-wired internal grid width for assimilation pathway
+        self.int_y = 128  # clt_hard-wired internal grid height for assimilation pathway
         self.data_path = data_path
         self.mode = mode
         self.film = film
         self.two_frames = two_frames
 
-        N_SAT_VARS = 2
-        N_ICOADS_VARS = 5
-        N_HADISD_VARS = 5
+        N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
+        N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
+        N_HADISD_VARS = 5  # clt_hard-wired number of HadISD vars used by encoder_hadisd
 
         # Load internal grid longitude-latitude locations
         self.era5_x = (
@@ -66,48 +66,48 @@ class ConvCNPWeather(nn.Module):
         )
 
         self.int_grid = [
-            (torch.linspace(0, 360, 240) / 360).float().cuda(),
-            (torch.linspace(-90, 90, 121) / 360).float().cuda(),
+            (torch.linspace(0, 360, 240) / 360).float().cuda(),  # clt_hard-wired lon grid size
+            (torch.linspace(-90, 90, 121) / 360).float().cuda(),  # clt_hard-wired lat grid size
         ]
 
         self.int_grid = [self.int_grid[0].unsqueeze(0), self.int_grid[1].unsqueeze(0)]
 
         # Create input setconvs for each data modality
         self.ascat_setconvs = convDeepSet(
-            0.001, "OnToOn", density_channel=True, device=self.device
+            0.001, "OnToOn", density_channel=True, device=self.device  # clt_hard-wired lengthscale
         )
         self.amsua_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(13)
         ]
         self.amsub_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(12)
         ]
         self.hirs_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(26)
         ]
 
         self.sat_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_SAT_VARS)
         ]
         self.hadisd_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_HADISD_VARS)
         ]
         self.icoads_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_ICOADS_VARS)
         ]
         self.igra_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(24)
         ]
 
         self.sc_out = convDeepSet(
-            0.001, "OnToOff", density_channel=False, device=self.device
+            0.001, "OnToOff", density_channel=False, device=self.device  # clt_hard-wired lengthscale
         )
 
         # Instantiate the decoder. Here decoder refers to decoder in a convCNP (i.e the ViT backbone)
@@ -115,29 +115,29 @@ class ConvCNPWeather(nn.Module):
             self.decoder_lr = ViT(
                 in_channels=in_channels,
                 out_channels=out_channels,
-                h_channels=512,
-                depth=16,
-                patch_size=5,
+                h_channels=512,  # clt_hard-wired ViT hidden width
+                depth=16,  # clt_hard-wired ViT depth
+                patch_size=5,  # clt_hard-wired ViT patch size
                 per_var_embedding=True,
-                img_size=[240, 121],
+                img_size=[240, 121],  # clt_hard-wired image size (matches int_grid)
             )
 
         elif self.decoder == "vit_assimilation":
             self.decoder_lr = ViT(
                 in_channels=256,
                 out_channels=out_channels,
-                h_channels=512,
-                depth=8,
-                patch_size=3,
+                h_channels=512,  # clt_hard-wired ViT hidden width
+                depth=8,  # clt_hard-wired ViT depth
+                patch_size=3,  # clt_hard-wired ViT patch size
                 per_var_embedding=False,
-                img_size=[256, 128],
+                img_size=[256, 128],  # clt_hard-wired image size for assimilation mode
             )
 
         self.mlp = MLP(
             in_channels=out_channels,
             out_channels=out_channels,
-            h_channels=128,
-            h_layers=4,
+            h_channels=128,  # clt_hard-wired MLP hidden width
+            h_layers=4,  # clt_hard-wired MLP depth
         )
         self.break_next = False
 

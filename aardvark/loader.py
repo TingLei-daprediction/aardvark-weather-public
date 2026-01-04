@@ -26,6 +26,8 @@ class WeatherDataset(Dataset):
         res=1,
         filter_dates=None,
         diff=None,
+        data_path=None,
+        aux_data_path=None,
     ):
 
         super().__init__()
@@ -33,8 +35,8 @@ class WeatherDataset(Dataset):
         # Setup
         self.device = device
         self.mode = hadisd_mode
-        self.data_path = "path_to_data/"
-        self.aux_data_path = "path_to_auxiliary_data/"
+        self.data_path = data_path or "path_to_data/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         self.start_date = start_date
         self.end_date = end_date
         self.lead_time = lead_time
@@ -513,6 +515,8 @@ class WeatherDatasetAssimilation(WeatherDataset):
         var_end=24,
         diff=False,
         two_frames=False,
+        data_path=None,
+        aux_data_path=None,
     ):
 
         super().__init__(
@@ -525,6 +529,8 @@ class WeatherDatasetAssimilation(WeatherDataset):
             res=res,
             filter_dates=filter_dates,
             diff=diff,
+            data_path=data_path,
+            aux_data_path=aux_data_path,
         )
 
         # Setup
@@ -732,7 +738,7 @@ class HadISDDataset(Dataset):
     HadISD dataset for decoder training
     """
 
-    def __init__(self, var, mode, device, start_date, end_date):
+    def __init__(self, var, mode, device, start_date, end_date, data_path=None, aux_data_path=None):
         super().__init__()
 
         # Setup
@@ -743,6 +749,8 @@ class HadISDDataset(Dataset):
         self.mode = mode
         self.start_date = start_date
         self.device = device
+        self.data_path = data_path or "path_to_data/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         dates = pd.date_range(start_date, end_date, freq="6H")
         self.index = np.array(range(len(dates)))
 
@@ -754,8 +762,8 @@ class HadISDDataset(Dataset):
         Load the raw HadISD data
         """
 
-        data_path = "path_to_data/"
-        aux_data_path = "path_to_auxiliary_data/"
+        data_path = self.data_path
+        aux_data_path = self.aux_data_path
         var = self.var
         mode = self.mode
 
@@ -826,10 +834,24 @@ class AardvarkICDataset(Dataset):
     Helper dataset to handle initial condition loading for decoder training
     """
 
-    def __init__(self, device, start_date, end_date, lead_time=0):
+    def __init__(
+        self,
+        device,
+        start_date,
+        end_date,
+        lead_time=0,
+        data_path=None,
+        aux_data_path=None,
+        encoder_predictions_path=None,
+    ):
         super().__init__()
 
         # Setup
+        self.data_path = data_path or "path_to_data/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
+        self.encoder_predictions_path = (
+            encoder_predictions_path or "path_to_encoder_predictions/"
+        )
 
         if lead_time == 0:
             # If leadtime is 0 load the output of the encoder
@@ -846,7 +868,7 @@ class AardvarkICDataset(Dataset):
             dates = pd.date_range(start_date, end_date, freq="6H")
 
             self.data = np.memmap(
-                "path_to_encoder_predictions/" + ic_fname,
+                self.encoder_predictions_path + ic_fname,
                 dtype="float32",
                 mode="r",
                 shape=(len(dates), 121, 240, 24),  # shape of the output
@@ -877,9 +899,8 @@ class AardvarkICDataset(Dataset):
         self.device = device
 
         # Normalisation
-        aux_data_path = "path_to_auxiliary_data/"
-        mean_factors_path = aux_data_path + f"norm_factors/mean_4u_1.npy"
-        std_factors_path = aux_data_path + f"norm_factors/std_4u_1.npy"
+        mean_factors_path = self.aux_data_path + f"norm_factors/mean_4u_1.npy"
+        std_factors_path = self.aux_data_path + f"norm_factors/std_4u_1.npy"
         self.means = np.load(mean_factors_path)[:, np.newaxis, np.newaxis, ...]
         self.stds = np.load(std_factors_path)[:, np.newaxis, np.newaxis, ...]
 
@@ -907,6 +928,8 @@ class WeatherDatasetDownscaling(Dataset):
         res=1,
         hadisd_var="tas",
         lead_time=1,
+        data_path=None,
+        aux_data_path=None,
     ):
         # The context mode determines whether we make use of ERA5 or our own ICs.
         if not context_mode in ["era5", "aardvark"]:
@@ -920,8 +943,8 @@ class WeatherDatasetDownscaling(Dataset):
         self.lead_time = lead_time
 
         self.device = device
-        self.data_path = "path_to_data/"
-        self.aux_data_path = "path_to_auxiliary_data/"
+        self.data_path = data_path or "path_to_data/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         self.start_date = start_date
         self.end_date = end_date
         self.era5_mode = era5_mode
@@ -965,12 +988,19 @@ class WeatherDatasetDownscaling(Dataset):
             device=device,
             start_date=start_date,
             end_date=end_date,
+            data_path=self.data_path,
+            aux_data_path=self.aux_data_path,
         )
 
         if context_mode == "aardvark":
             # Load the Aardvark encoder predictions
             self.aardvark_data = AardvarkICDataset(
-                device, start_date, end_date, lead_time
+                device,
+                start_date,
+                end_date,
+                lead_time,
+                data_path=self.data_path,
+                aux_data_path=self.aux_data_path,
             )
 
     def load_era5(self, year):
@@ -1134,6 +1164,8 @@ class ForecasterDatasetDownscaling(Dataset):
         device,
         forecast_path,
         region="global",
+        data_path=None,
+        aux_data_path=None,
     ):
         super().__init__()
 
@@ -1147,26 +1179,26 @@ class ForecasterDatasetDownscaling(Dataset):
         self.end_date = end_date
         self.lead_time = lead_time
         self.mode = mode
+        self.data_path = data_path or "path_to_data/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         self.offset = np.timedelta64(lead_time, "D").astype("timedelta64[ns]")
 
         self.dates = pd.date_range(start_date, end_date, freq="6H")[:-30]
 
         # Normalisation
-        aux_data_path = "auxiliary_data_path/"
-        self.means = np.load(aux_data_path + "norm_factors/mean_4u_1.npy")
-        self.stds = np.load(aux_data_path + "norm_factors/std_4u_1.npy")
+        self.means = np.load(self.aux_data_path + "norm_factors/mean_4u_1.npy")
+        self.stds = np.load(self.aux_data_path + "norm_factors/std_4u_1.npy")
 
         # Load auxiliary data
         self.load_npy_file()
-        data_path = "data_path/"
         res = "1"
-        raw_era5_lon = np.load(data_path + f"era5/era5_x_{res}.npy")
-        raw_era5_lat = np.load(data_path + f"era5/era5_y_{res}.npy")
+        raw_era5_lon = np.load(self.data_path + f"era5/era5_x_{res}.npy")
+        raw_era5_lat = np.load(self.data_path + f"era5/era5_y_{res}.npy")
         self.era5_x = [
             self.to_tensor(raw_era5_lon) / LATLON_SCALE_FACTOR,
             self.to_tensor(raw_era5_lat) / LATLON_SCALE_FACTOR,
         ]
-        elev_path = data_path + f"era5/elev_vars_{res}.npy"
+        elev_path = self.data_path + f"era5/elev_vars_{res}.npy"
         self.era5_elev = self.to_tensor(np.load(elev_path)).permute(0, 2, 1)
 
         # Load hadISD
@@ -1176,6 +1208,8 @@ class ForecasterDatasetDownscaling(Dataset):
             device=device,
             start_date=start_date,
             end_date=end_date,
+            data_path=self.data_path,
+            aux_data_path=self.aux_data_path,
         )
 
         # Subset to region
@@ -1307,6 +1341,8 @@ class ForecastLoader(Dataset):
         finetune_step=None,
         finetune_eval_every=100,
         eval_steps=False,
+        data_path=None,
+        aux_data_path=None,
     ):
 
         super().__init__()
@@ -1314,7 +1350,8 @@ class ForecastLoader(Dataset):
         # Setup
         self.device = device
         self.mode = mode
-        self.data_path = "data_path/"
+        self.data_path = data_path or "data_path/"
+        self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
 
         self.lead_time = lead_time
         self.era5_mode = era5_mode

@@ -89,12 +89,16 @@ def main(rank, world_size, output_dir, args):
     if args.loss == "lw_rmse":
         lf = WeightedRmseLoss(
             args.res,
+            args.data_path,
+            args.aux_data_path,
             start_ind=args.start_ind,
             end_ind=args.end_ind,
             weight_per_variable=bool(args.weight_per_variable),
         )
     elif args.loss == "lw_rmse_pressure_weighted":
-        lf = PressureWeightedRmseLoss(args.res, era5_mode)
+        lf = PressureWeightedRmseLoss(
+            args.res, era5_mode, args.data_path, args.aux_data_path
+        )
     elif args.loss == "rmse":
         lf = RmseLoss()
     elif args.loss == "downscaling_rmse":
@@ -107,8 +111,8 @@ def main(rank, world_size, output_dir, args):
         train_dataset = WeatherDatasetAssimilation(
             device=device_name,
             hadisd_mode="train",
-            start_date="2007-01-02",
-            end_date="2017-12-31",
+            start_date=args.assim_train_start_date,
+            end_date=args.assim_train_end_date,
             lead_time=0,
             era5_mode="4u",
             res=args.res,
@@ -116,12 +120,14 @@ def main(rank, world_size, output_dir, args):
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
             hadisd_mode="train",
-            start_date="2019-01-01",
-            end_date="2019-12-31",
+            start_date=args.assim_val_start_date,
+            end_date=args.assim_val_end_date,
             lead_time=0,
             era5_mode="4u",
             res=args.res,
@@ -129,6 +135,8 @@ def main(rank, world_size, output_dir, args):
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
         )
 
     # Case 2: training processor
@@ -144,6 +152,8 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 random_lt=True,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
             val_dataset = FineTuneForecastLoaderNew(
                 device=device_name,
@@ -154,6 +164,8 @@ def main(rank, world_size, output_dir, args):
                 frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
         else:
             train_dataset = ForecastLoader(
@@ -166,6 +178,8 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
             val_dataset = ForecastLoader(
                 device=device_name,
@@ -177,6 +191,8 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
 
     # Case 3: training decoder
@@ -190,6 +206,8 @@ def main(rank, world_size, output_dir, args):
             mode="train",
             device=device_name,
             forecast_path=None,
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
         )
 
         val_dataset = ForecasterDatasetDownscaling(
@@ -200,6 +218,8 @@ def main(rank, world_size, output_dir, args):
             mode="train",
             device=device_name,
             forecast_path=None,
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
         )
 
         try:
@@ -221,6 +241,7 @@ def main(rank, world_size, output_dir, args):
             decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
+            data_path=args.model_data_path,
         )
     else:
         model = ConvCNPWeather(
@@ -234,6 +255,7 @@ def main(rank, world_size, output_dir, args):
             mode=args.mode,
             film=bool(args.film),
             two_frames=bool(args.two_frames),
+            data_path=args.model_data_path,
         )
 
     # Instantiate loaders
@@ -305,6 +327,13 @@ if __name__ == "__main__":
     parser.add_argument("--diff", type=int, default=1)
     parser.add_argument("--start_ind", type=int, default=0)
     parser.add_argument("--end_ind", type=int, default=24)
+    parser.add_argument("--assim_train_start_date", default="2007-01-02")
+    parser.add_argument("--assim_train_end_date", default="2017-12-31")
+    parser.add_argument("--assim_val_start_date", default="2019-01-01")
+    parser.add_argument("--assim_val_end_date", default="2019-12-31")
+    parser.add_argument("--data_path", default="path_to_data/")
+    parser.add_argument("--aux_data_path", default="path_to_auxiliary_data/")
+    parser.add_argument("--model_data_path", default="../data/")
     parser.add_argument("--downscaling_train_start_date", default="1979-01-01")
     parser.add_argument("--downscaling_train_end_date", default="2017-12-31")
     parser.add_argument("--downscaling_context", default="era5")
