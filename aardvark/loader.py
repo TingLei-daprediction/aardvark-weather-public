@@ -28,6 +28,7 @@ class WeatherDataset(Dataset):
         diff=None,
         data_path=None,
         aux_data_path=None,
+        disable_igra=False,
     ):
 
         super().__init__()
@@ -44,6 +45,7 @@ class WeatherDataset(Dataset):
         self.res = res
         self.filter_dates = filter_dates
         self.diff = diff
+        self.disable_igra = disable_igra
 
         # Date indexing
         self.dates = pd.date_range(start_date, end_date, freq="6H")
@@ -55,8 +57,9 @@ class WeatherDataset(Dataset):
             self.index = np.array(range(len(self.dates)))
 
         # Load the input modalities
-        print("Loading IGRA")
-        self.load_igra()
+        if not self.disable_igra:
+            print("Loading IGRA")
+            self.load_igra()
 
         print("Loading AMSU-A")
         self.load_amsua()
@@ -517,6 +520,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         two_frames=False,
         data_path=None,
         aux_data_path=None,
+        disable_igra=False,
     ):
 
         super().__init__(
@@ -531,6 +535,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             diff=diff,
             data_path=data_path,
             aux_data_path=aux_data_path,
+            disable_igra=disable_igra,
         )
 
         # Setup
@@ -664,11 +669,12 @@ class WeatherDatasetAssimilation(WeatherDataset):
         iasi_x = [self.to_tensor(i) for i in self.iasi_x]
         iasi_y = self.norm_data(iasi_y, self.iasi_means, self.iasi_stds)
 
-        # IGRA
-        igra_y = self.to_tensor(self.igra_y[index + self.igra_index_offset, ...])
-        igra_x = [self.igra_x[:, 0], self.igra_x[:, 1]]
-        igra_x = [self.to_tensor(i) for i in igra_x]
-        igra_y = self.norm_data(igra_y, self.igra_means, self.igra_stds)
+        # IGRA (optional)
+        if not self.disable_igra:
+            igra_y = self.to_tensor(self.igra_y[index + self.igra_index_offset, ...])
+            igra_x = [self.igra_x[:, 0], self.igra_x[:, 1]]
+            igra_x = [self.to_tensor(i) for i in igra_x]
+            igra_y = self.norm_data(igra_y, self.igra_means, self.igra_stds)
 
         # ASCAT
         ascat_y = self.to_tensor(self.ascat_y[index + self.ascat_index_offset, ...])
@@ -708,8 +714,14 @@ class WeatherDatasetAssimilation(WeatherDataset):
             "sat_{}".format(prefix): sat_y,
             "icoads_x_{}".format(prefix): icoads_x,
             "icoads_{}".format(prefix): icoads_y,
-            "igra_x_{}".format(prefix): igra_x,
-            "igra_{}".format(prefix): igra_y,
+            **(
+                {}
+                if self.disable_igra
+                else {
+                    "igra_x_{}".format(prefix): igra_x,
+                    "igra_{}".format(prefix): igra_y,
+                }
+            ),
             "amsua_{}".format(prefix): amsua_y,
             "amsua_x_{}".format(prefix): amsua_x,
             "amsub_{}".format(prefix): amsub_y,

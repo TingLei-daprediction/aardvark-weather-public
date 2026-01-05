@@ -122,6 +122,7 @@ def main(rank, world_size, output_dir, args):
             two_frames=bool(args.two_frames),
             data_path=args.data_path,
             aux_data_path=args.aux_data_path,
+            disable_igra=bool(args.disable_igra),
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -137,6 +138,7 @@ def main(rank, world_size, output_dir, args):
             two_frames=bool(args.two_frames),
             data_path=args.data_path,
             aux_data_path=args.aux_data_path,
+            disable_igra=bool(args.disable_igra),
         )
 
     # Case 2: training processor
@@ -327,6 +329,7 @@ if __name__ == "__main__":
     parser.add_argument("--diff", type=int, default=1)
     parser.add_argument("--start_ind", type=int, default=0)
     parser.add_argument("--end_ind", type=int, default=24)
+    parser.add_argument("--disable_igra", type=int, default=0)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")

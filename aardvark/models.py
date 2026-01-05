@@ -317,6 +317,15 @@ class ConvCNPWeather(nn.Module):
             )
             elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])
 
+            def igra_encoding(prefix):
+                if f"igra_{prefix}" in task and f"igra_x_{prefix}" in task:
+                    return self.encoder_igra(task, prefix)
+                batch = task["y_target"].shape[0]
+                return torch.zeros(
+                    (batch, 24, elev.shape[2], elev.shape[3]),
+                    device=elev.device,
+                )
+
             if not self.two_frames:
                 encodings = [
                     self.encoder_iasi(task, "current"),
@@ -326,7 +335,7 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "current"),
                     self.encoder_amsua(task, "current"),
                     self.encoder_amsub(task, "current"),
-                    self.encoder_igra(task, "current"),
+                    igra_encoding("current"),
                     self.encoder_hirs(task, "current"),
                     elev,
                     task["climatology_current"],
@@ -343,7 +352,7 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "current"),
                     self.encoder_amsua(task, "current"),
                     self.encoder_amsub(task, "current"),
-                    self.encoder_igra(task, "current"),
+                    igra_encoding("current"),
                     self.encoder_hirs(task, "current"),
                     self.encoder_iasi(task, "prev"),
                     self.encoder_ascat(task, "prev"),
@@ -352,7 +361,7 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "prev"),
                     self.encoder_amsua(task, "prev"),
                     self.encoder_amsub(task, "prev"),
-                    self.encoder_igra(task, "prev"),
+                    igra_encoding("prev"),
                     self.encoder_hirs(task, "prev"),
                     elev,
                     task["climatology_current"],
