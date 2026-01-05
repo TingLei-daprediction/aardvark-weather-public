@@ -1,3 +1,4 @@
+import os
 import sys
 import subprocess
 
@@ -44,6 +45,8 @@ class DDPTrainer:
         self.best_loss = 1000
         self.test_loader = test_loader
 
+        self._load_weights_if_provided(weights_path)
+
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
 
@@ -61,7 +64,6 @@ class DDPTrainer:
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
 
-<<<<<<< ours
         self.losses = []
         self.train_losses = []
         self.maes = []
@@ -93,12 +95,6 @@ class DDPTrainer:
 
         self.model.load_state_dict(state_dict, strict=False)
 
-=======
-        self.losses = []
-        self.train_losses = []
-        self.maes = []
-
->>>>>>> theirs
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
 
@@ -352,6 +348,8 @@ class DDPTrainerE2E:
         self.test_loader = test_loader
         self.hadisd_variable_name = hadisd_variable_name
 
+        self._load_weights_if_provided(weights_path)
+
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
 
@@ -368,7 +366,6 @@ class DDPTrainerE2E:
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
 
-<<<<<<< ours
         self.losses = []
         self.train_losses = []
 
@@ -400,12 +397,6 @@ class DDPTrainerE2E:
                 state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
 
         self.model.load_state_dict(state_dict, strict=False)
-=======
-        self.losses = []
-        self.train_losses = []
-
-        self.maes = []
->>>>>>> theirs
 
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
