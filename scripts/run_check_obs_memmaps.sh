@@ -4,6 +4,6 @@
 
 set -euo pipefail
 
-DATA_PATH="/path/to/data_path"
+DATA_PATH="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/aardvark-weather/training_data"
 
 python "$(dirname "$0")/check_obs_memmaps.py" --data_path "${DATA_PATH}"
