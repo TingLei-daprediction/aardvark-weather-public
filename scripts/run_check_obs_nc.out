@@ -1,0 +1,60 @@
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/scripts/check_obs_netcdfs.py:44: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  dims = ", ".join([f"{k}={v}" for k, v in ds.dims.items()])
+<frozen _collections_abc>:861: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+[OK] amsua_data_v1.nc
+  dims: time=4746, latitude=180, longitude=360
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] amsub_data_v1.nc
+  dims: time=4746, latitude=180, longitude=360
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] ascat_data_v1.nc
+  dims: time=4746, latitude=181, longitude=360
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] hirs_data_v1.nc
+  dims: time=4746, latitude=180, longitude=360
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] gridsat_data_v1.nc
+  dims: time=4746, latitude=200, longitude=514
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] iasi_data_2007_2013_v1.nc
+  dims: time=2556, latitude=181, longitude=360
+  time: 2007-01-02T00:00:00 -> 2013-12-31T00:00:00, step=86400000000000 nanoseconds
+[OK] iasi_data_2014_2019_v1.nc
+  dims: time=2190, latitude=181, longitude=360
+  time: 2014-01-01T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] igra_data_v1.nc
+  dims: time=4746, station_id=1375
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] icoads_data_v1.nc
+  dims: time=4746, entry=12000
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
+[OK] hadisd_data_v1.nc
+  dims: station_index_tas=9549, time=4746, station_index_ws=9551, station_index_wd=9551, station_index_psl=8846, station_index_tds=9447
+  time: 2007-01-02T00:00:00 -> 2019-12-30T00:00:00, step=86400000000000 nanoseconds
