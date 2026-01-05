@@ -7,6 +7,7 @@ Inputs:
 
 Outputs (per year):
   - <output_dir>/era5/era5_4u_1_6_<year>.memmap  (or other mode name via --era5_mode)
+  - daily option writes: era5_4u_1_1d_<year>.memmap (see --time_freq)
   - <output_dir>/norm_factors/mean_<mode>_1.npy and std_<mode>_1.npy (per-channel mean/std)
 
 Notes:
@@ -56,6 +57,11 @@ def parse_args():
         default="../data/grid_lon_lat",
         help="Directory containing era5_x_1.npy and era5_y_1.npy",
     )
+    p.add_argument(
+        "--time_freq",
+        default="6H",
+        help="Output frequency: 6H or 1D (daily 00 UTC)",
+    )
     return p.parse_args()
 
 
@@ -93,6 +99,17 @@ def write_memmap(year, arr, memmap_path):
     del mmap
 
 
+def select_daily_00utc(ds, time_name):
+    if time_name not in ds.coords:
+        return ds
+    time = ds[time_name]
+    if time.dt.hour.size == 0:
+        return ds
+    if int(time.dt.hour.max()) == 0 and int(time.dt.hour.min()) == 0:
+        return ds
+    return ds.where(time.dt.hour == 0, drop=True)
+
+
 def main():
     args = parse_args()
     memmap_dir, norms_dir = ensure_dirs(args.output_dir)
@@ -126,6 +143,8 @@ def main():
 
         ds = xr.open_mfdataset(files, combine="by_coords")
         ds, time_name, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+        if args.time_freq == "1D":
+            ds = select_daily_00utc(ds, time_name)
 
         # Stack variables in the given order, flattening levels (if present) into channels
         channel_arrays = []
@@ -157,7 +176,8 @@ def main():
         # Concatenate all channels: resulting shape (time, channels, lon, lat)
         arr = np.concatenate(channel_arrays, axis=1)
 
-        memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_6_{year}.memmap"
+        freq_tag = "6" if args.time_freq == "6H" else "1d"
+        memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_{freq_tag}_{year}.memmap"
         print(f"[INFO] Writing {memmap_path} with shape {arr.shape}")
         write_memmap(year, arr, memmap_path)
 

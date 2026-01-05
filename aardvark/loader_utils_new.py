@@ -43,41 +43,77 @@ def generate_offsets(date_list, dates):
     return offsets
 
 
-IC_OFFSETS = generate_offsets(
-    date_list, pd.date_range("1999-01-02", "2021-12-31 18:00", freq="6H")
-)
+def build_offsets(freq):
+    if freq == "1D":
+        return {
+            "ic": generate_offsets(
+                date_list, pd.date_range("1999-01-02", "2021-12-31", freq=freq)
+            ),
+            "amsua": generate_offsets(
+                date_list, pd.date_range("2007-01-01", "2021-12-31", freq=freq)
+            ),
+            "amsub": generate_offsets(
+                date_list, pd.date_range("2007-01-01", "2021-12-31", freq=freq)
+            ),
+            "ascat": generate_offsets(
+                date_list, pd.date_range("2007-01-01", "2021-12-31", freq=freq)
+            ),
+            "atms": generate_offsets(
+                date_list, pd.date_range("2013-01-02", "2021-12-31", freq=freq)
+            ),
+            "icoads": generate_offsets(
+                date_list, pd.date_range("1999-01-01", "2021-12-31", freq=freq)
+            ),
+            "igra": generate_offsets(
+                date_list, pd.date_range("1999-01-01", "2021-12-31", freq=freq)
+            ),
+            "sat": generate_offsets(
+                date_list, pd.date_range("1990-01-01", "2021-12-31", freq=freq)
+            ),
+            "hadisd": generate_offsets(
+                date_list, pd.date_range("1950-01-01", "2021-12-31", freq=freq)
+            ),
+        }
+    return {
+        "ic": generate_offsets(
+            date_list, pd.date_range("1999-01-02", "2021-12-31 18:00", freq=freq)
+        ),
+        "amsua": generate_offsets(
+            date_list, pd.date_range("2007-01-01", "2021-12-31 18:00", freq=freq)
+        ),
+        "amsub": generate_offsets(
+            date_list, pd.date_range("2007-01-01", "2021-12-31 18:00", freq=freq)
+        ),
+        "ascat": generate_offsets(
+            date_list, pd.date_range("2007-01-01", "2021-12-31", freq=freq)
+        ),
+        "atms": generate_offsets(
+            date_list, pd.date_range("2013-01-02", "2021-12-31", freq="1D")
+        ),
+        "icoads": generate_offsets(
+            date_list, pd.date_range("1999-01-01 06:00", "2021-12-31", freq=freq)
+        ),
+        "igra": generate_offsets(
+            date_list, pd.date_range("1999-01-01 00:00", "2021-12-31 18:00", freq=freq)
+        ),
+        "sat": generate_offsets(
+            date_list, pd.date_range("1990-01-01 00:00", "2021-12-31 18:00", freq=freq)
+        ),
+        "hadisd": generate_offsets(
+            date_list, pd.date_range("1950-01-01 00:00", "2021-12-31 18:00", freq=freq)
+        ),
+    }
 
-AMSUA_OFFSETS = generate_offsets(
-    date_list, pd.date_range("2007-01-01", "2021-12-31 18:00", freq="6H")
-)
 
-AMSUB_OFFSETS = generate_offsets(
-    date_list, pd.date_range("2007-01-01", "2021-12-31 18:00", freq="6H")
-)
-
-ASCAT_OFFSETS = generate_offsets(
-    date_list, pd.date_range("2007-01-01", "2021-12-31", freq="6H")
-)
-
-ATMS_OFFSETS = generate_offsets(
-    date_list, pd.date_range("2013-01-02", "2021-12-31", freq="1D")
-)
-
-ICOADS_OFFSETS = generate_offsets(
-    date_list, pd.date_range("1999-01-01 06:00", "2021-12-31", freq="6H")
-)
-
-IGRA_OFFSETS = generate_offsets(
-    date_list, pd.date_range("1999-01-01 00:00", "2021-12-31 18:00", freq="6H")
-)
-
-SAT_OFFSETS = generate_offsets(
-    date_list, pd.date_range("1990-01-01 00:00", "2021-12-31 18:00", freq="6H")
-)
-
-HADISD_OFFSETS = generate_offsets(
-    date_list, pd.date_range("1950-01-01 00:00", "2021-12-31 18:00", freq="6H")
-)
+IC_OFFSETS = build_offsets("6H")["ic"]
+AMSUA_OFFSETS = build_offsets("6H")["amsua"]
+AMSUB_OFFSETS = build_offsets("6H")["amsub"]
+ASCAT_OFFSETS = build_offsets("6H")["ascat"]
+ATMS_OFFSETS = build_offsets("6H")["atms"]
+ICOADS_OFFSETS = build_offsets("6H")["icoads"]
+IGRA_OFFSETS = build_offsets("6H")["igra"]
+SAT_OFFSETS = build_offsets("6H")["sat"]
+HADISD_OFFSETS = build_offsets("6H")["hadisd"]
 
 
 def lon_to_0_360(x):

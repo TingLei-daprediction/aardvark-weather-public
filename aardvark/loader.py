@@ -1,3 +1,4 @@
+import os
 import time as timelib
 from time import time
 
@@ -29,6 +30,7 @@ class WeatherDataset(Dataset):
         data_path=None,
         aux_data_path=None,
         disable_igra=False,
+        time_freq="6H",
     ):
 
         super().__init__()
@@ -46,9 +48,11 @@ class WeatherDataset(Dataset):
         self.filter_dates = filter_dates
         self.diff = diff
         self.disable_igra = disable_igra
+        self.time_freq = time_freq
+        self.offsets = build_offsets(self.time_freq)
 
         # Date indexing
-        self.dates = pd.date_range(start_date, end_date, freq="6H")
+        self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)
         if self.filter_dates == "start":
             self.index = np.array([i for i, d in enumerate(self.dates) if d.month < 7])
         elif self.filter_dates == "end":
@@ -139,24 +143,45 @@ class WeatherDataset(Dataset):
                 + "norm_factors/std_{}_{}.npy".format(self.era5_mode, self.res)
             )[:, np.newaxis, np.newaxis, ...]
 
+    def _infer_time_dim(self, path, fixed_shape):
+        file_bytes = os.path.getsize(path)
+        denom = 4
+        for dim in fixed_shape:
+            denom *= dim
+        if file_bytes % denom != 0:
+            raise ValueError(f"File size not divisible by expected frame size: {path}")
+        return file_bytes // denom
+
     def load_icoads(self):
         """
         Load the ICOADS data
         """
 
+        icoads_y_path = self.data_path + "icoads/1999_2021_icoads_y.mmap"
+        icoads_y_shape = list(ICOADS_Y_SHAPE)
+        if self.time_freq != "6H":
+            icoads_y_shape[0] = self._infer_time_dim(
+                icoads_y_path, icoads_y_shape[1:]
+            )
         self.icoads_y = np.memmap(
-            self.data_path + "icoads/1999_2021_icoads_y.mmap",
+            icoads_y_path,
             dtype="float32",
             mode="r",
-            shape=ICOADS_Y_SHAPE,
+            shape=tuple(icoads_y_shape),
         )
 
+        icoads_x_path = self.data_path + "icoads/1999_2021_icoads_x.mmap"
+        icoads_x_shape = list(ICOADS_X_SHAPE)
+        if self.time_freq != "6H":
+            icoads_x_shape[0] = self._infer_time_dim(
+                icoads_x_path, icoads_x_shape[1:]
+            )
         self.icoads_x = (
             np.memmap(
-                self.data_path + "icoads/1999_2021_icoads_x.mmap",
+                icoads_x_path,
                 dtype="float32",
                 mode="r",
-                shape=ICOADS_X_SHAPE,
+                shape=tuple(icoads_x_shape),
             )
             / LATLON_SCALE_FACTOR
         )
@@ -172,7 +197,7 @@ class WeatherDataset(Dataset):
         self.icoads_stds = self.to_tensor(
             np.nanstd(self.icoads_y[-365 * 4 :, ...], axis=(0, 2))[:, np.newaxis]
         )
-        self.icoads_index_offset = ICOADS_OFFSETS[self.start_date]
+        self.icoads_index_offset = self.offsets["icoads"][self.start_date]
         return
 
     def load_igra(self):
@@ -180,11 +205,15 @@ class WeatherDataset(Dataset):
         Load the IGRA data
         """
 
+        igra_y_path = self.data_path + "igra/1999_2021_igra_y.mmap"
+        igra_y_shape = list(IGRA_Y_SHAPE)
+        if self.time_freq != "6H":
+            igra_y_shape[0] = self._infer_time_dim(igra_y_path, igra_y_shape[1:])
         self.igra_y = np.memmap(
-            self.data_path + "igra/1999_2021_igra_y.mmap",
+            igra_y_path,
             dtype="float32",
             mode="r",
-            shape=IGRA_Y_SHAPE,
+            shape=tuple(igra_y_shape),
         )
 
         self.igra_x = np.copy(
@@ -204,7 +233,7 @@ class WeatherDataset(Dataset):
             np.load(self.aux_data_path + "norm_factors/std_igra.npy")
         )
 
-        self.igra_index_offset = IGRA_OFFSETS[self.start_date]
+        self.igra_index_offset = self.offsets["igra"][self.start_date]
 
         return
 
@@ -213,13 +242,17 @@ class WeatherDataset(Dataset):
         Load the AMSU-A data
         """
 
+        amsua_path = self.data_path + "amsua/2007_2021_amsua.mmap"
+        amsua_shape = list(AMSUA_Y_SHAPE)
+        if self.time_freq != "6H":
+            amsua_shape[0] = self._infer_time_dim(amsua_path, amsua_shape[1:])
         self.amsua_y = np.memmap(
-            self.data_path + "amsua/2007_2021_amsua.mmap",
+            amsua_path,
             dtype="float32",
             mode="r",
-            shape=AMSUA_Y_SHAPE,
+            shape=tuple(amsua_shape),
         )
-        self.amsua_index_offset = AMSUA_OFFSETS[self.start_date]
+        self.amsua_index_offset = self.offsets["amsua"][self.start_date]
 
         xx = np.linspace(-180, 179, 360, dtype=np.float32)
         xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
@@ -240,13 +273,17 @@ class WeatherDataset(Dataset):
         Load the AMSU-B data
         """
 
+        amsub_path = self.data_path + "amsub_mhs/2007_2021_amsub.mmap"
+        amsub_shape = list(AMSUB_Y_SHAPE)
+        if self.time_freq != "6H":
+            amsub_shape[0] = self._infer_time_dim(amsub_path, amsub_shape[1:])
         self.amsub_y = np.memmap(
-            self.data_path + "amsub_mhs/2007_2021_amsub.mmap",
+            amsub_path,
             dtype="float32",
             mode="r",
-            shape=AMSUB_Y_SHAPE,
+            shape=tuple(amsub_shape),
         )
-        self.amsub_index_offset = AMSUB_OFFSETS[self.start_date]
+        self.amsub_index_offset = self.offsets["amsub"][self.start_date]
 
         xx = np.linspace(0, 359, 360, dtype=np.float32)
         xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
@@ -267,13 +304,17 @@ class WeatherDataset(Dataset):
         Load the ASCAT data
         """
 
+        ascat_path = self.data_path + "ascat/2007_2021_ascat.mmap"
+        ascat_shape = list(ASCAT_Y_SHAPE)
+        if self.time_freq != "6H":
+            ascat_shape[0] = self._infer_time_dim(ascat_path, ascat_shape[1:])
         self.ascat_y = np.memmap(
-            self.data_path + "ascat/2007_2021_ascat.mmap",
+            ascat_path,
             dtype="float32",
             mode="r",
-            shape=ASCAT_Y_SHAPE,
+            shape=tuple(ascat_shape),
         )
-        self.ascat_index_offset = ASCAT_OFFSETS[self.start_date]
+        self.ascat_index_offset = self.offsets["ascat"][self.start_date]
 
         xx = np.linspace(0, 359, 360, dtype=np.float32)
         xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
@@ -294,13 +335,17 @@ class WeatherDataset(Dataset):
         Load the HIRS data
         """
 
+        hirs_path = self.data_path + "hirs/2007_2021_hirs.mmap"
+        hirs_shape = list(HIRS_Y_SHAPE)
+        if self.time_freq != "6H":
+            hirs_shape[0] = self._infer_time_dim(hirs_path, hirs_shape[1:])
         self.hirs_y = np.memmap(
-            self.data_path + "hirs/2007_2021_hirs.mmap",
+            hirs_path,
             dtype="float32",
             mode="r",
-            shape=HIRS_Y_SHAPE,
+            shape=tuple(hirs_shape),
         )
-        self.hirs_index_offset = ASCAT_OFFSETS[self.start_date]
+        self.hirs_index_offset = self.offsets["ascat"][self.start_date]
 
         xx = np.linspace(0, 359, 360, dtype=np.float32)
         xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
@@ -321,17 +366,21 @@ class WeatherDataset(Dataset):
         Load the GRIDSAT data
         """
 
+        sat_path = self.data_path + "gridsat/gridsat_data.mmap"
+        sat_shape = list(GRIDSAT_Y_SHAPE)
+        if self.time_freq != "6H":
+            sat_shape[0] = self._infer_time_dim(sat_path, sat_shape[1:])
         self.sat_y = np.memmap(
-            self.data_path + "gridsat/gridsat_data.mmap",
+            sat_path,
             dtype="float32",
             mode="r",
-            shape=GRIDSAT_Y_SHAPE,
+            shape=tuple(sat_shape),
         )
 
         xx = np.load(self.data_path + "gridsat/sat_x.npy") / LATLON_SCALE_FACTOR
         yy = np.load(self.data_path + "gridsat/sat_y.npy") / LATLON_SCALE_FACTOR
         self.sat_x = [xx, yy]
-        self.sat_index_offset = SAT_OFFSETS[self.start_date]
+        self.sat_index_offset = self.offsets["sat"][self.start_date]
 
         self.sat_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_sat.npy")
@@ -347,13 +396,17 @@ class WeatherDataset(Dataset):
         Load the IASI data
         """
 
+        iasi_path = self.data_path + "2007_2021_iasi_subset.mmap"
+        iasi_shape = list(IASI_Y_SHAPE)
+        if self.time_freq != "6H":
+            iasi_shape[0] = self._infer_time_dim(iasi_path, iasi_shape[1:])
         self.iasi = np.memmap(
-            self.data_path + "2007_2021_iasi_subset.mmap",
+            iasi_path,
             dtype="float32",
             mode="r",
-            shape=IASI_Y_SHAPE,
+            shape=tuple(iasi_shape),
         )
-        self.iasi_index_offset = ASCAT_OFFSETS[self.start_date]
+        self.iasi_index_offset = self.offsets["ascat"][self.start_date]
 
         xx = np.linspace(0, 359, 360, dtype=np.float32)
         xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
@@ -390,20 +443,27 @@ class WeatherDataset(Dataset):
             alt = np.load(
                 self.data_path + "hadisd_processed/{}_alt_{}.npy".format(var, mode)
             )
-
+            vals_path = (
+                self.data_path + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode)
+            )
+            if self.time_freq == "6H":
+                shape = get_hadisd_shape(mode)
+            else:
+                stations = lon.shape[0]
+                time_dim = self._infer_time_dim(vals_path, [stations])
+                shape = (time_dim, stations)
             vals = np.memmap(
-                self.data_path
-                + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode),
+                vals_path,
                 dtype="float32",
                 mode="r",
-                shape=get_hadisd_shape(mode),
+                shape=shape,
             )
 
             self.hadisd_x.append(np.stack([lon, lat], axis=-1) / LATLON_SCALE_FACTOR)
             self.hadisd_alt.append(alt)
             self.hadisd_y.append(vals)
 
-        self.hadisd_index_offset = HADISD_OFFSETS[self.start_date]
+        self.hadisd_index_offset = self.offsets["hadisd"][self.start_date]
 
         self.hadisd_means = [
             self.to_tensor(
@@ -430,9 +490,10 @@ class WeatherDataset(Dataset):
         """
 
         if year % 4 == 0:
-            d = 366 * 4
+            days = 366
         else:
-            d = 365 * 4
+            days = 365
+        d = days * (4 if self.time_freq == "6H" else 1)
 
         if self.era5_mode == "sfc":
             levels = 4
@@ -447,9 +508,12 @@ class WeatherDataset(Dataset):
         elif self.res == 5:
             x = 64
             y = 32
+        freq_tag = "6" if self.time_freq == "6H" else "1d"
         mmap = np.memmap(
             self.data_path
-            + "/era5/era5_{}_{}_6_{}.memmap".format(self.era5_mode, self.res, year),
+            + "/era5/era5_{}_{}_{}_{}.memmap".format(
+                self.era5_mode, self.res, freq_tag, year
+            ),
             dtype="float32",
             mode="r",
             shape=(d, levels, x, y),
@@ -521,6 +585,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         data_path=None,
         aux_data_path=None,
         disable_igra=False,
+        time_freq="6H",
     ):
 
         super().__init__(
@@ -536,6 +601,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             data_path=data_path,
             aux_data_path=aux_data_path,
             disable_igra=disable_igra,
+            time_freq=time_freq,
         )
 
         # Setup
@@ -750,7 +816,17 @@ class HadISDDataset(Dataset):
     HadISD dataset for decoder training
     """
 
-    def __init__(self, var, mode, device, start_date, end_date, data_path=None, aux_data_path=None):
+    def __init__(
+        self,
+        var,
+        mode,
+        device,
+        start_date,
+        end_date,
+        data_path=None,
+        aux_data_path=None,
+        time_freq="6H",
+    ):
         super().__init__()
 
         # Setup
@@ -763,7 +839,9 @@ class HadISDDataset(Dataset):
         self.device = device
         self.data_path = data_path or "path_to_data/"
         self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
-        dates = pd.date_range(start_date, end_date, freq="6H")
+        self.time_freq = time_freq
+        self.offsets = build_offsets(self.time_freq)
+        dates = pd.date_range(start_date, end_date, freq=self.time_freq)
         self.index = np.array(range(len(dates)))
 
         # Load the hadISD data
@@ -779,11 +857,18 @@ class HadISDDataset(Dataset):
         var = self.var
         mode = self.mode
 
+        vals_path = data_path + f"hadisd_processed/{var}_vals_{mode}.memmap"
+        if self.time_freq == "6H":
+            shape = get_hadisd_shape(mode)
+        else:
+            stations = lon.shape[0]
+            time_dim = self._infer_time_dim(vals_path, [stations])
+            shape = (time_dim, stations)
         vals = np.memmap(
-            data_path + f"hadisd_processed/{var}_vals_{mode}.memmap",
+            vals_path,
             dtype="float32",
             mode="r",
-            shape=get_hadisd_shape(mode),
+            shape=shape,
         )
 
         lon = lon_to_0_360(
@@ -796,7 +881,7 @@ class HadISDDataset(Dataset):
         )
         self.hadisd_y = vals
 
-        self.hadisd_index_offset = HADISD_OFFSETS[self.start_date]
+        self.hadisd_index_offset = self.offsets["hadisd"][self.start_date]
         self.hadisd_means = self.to_tensor(
             np.load(aux_data_path + f"norm_factors/mean_hadisd_{var}.npy")
         )
@@ -816,6 +901,15 @@ class HadISDDataset(Dataset):
 
     def to_tensor(self, arr):
         return torch.from_numpy(np.array(arr)).float().to(self.device)
+
+    def _infer_time_dim(self, path, fixed_shape):
+        file_bytes = os.path.getsize(path)
+        denom = 4
+        for dim in fixed_shape:
+            denom *= dim
+        if file_bytes % denom != 0:
+            raise ValueError(f"File size not divisible by expected frame size: {path}")
+        return file_bytes // denom
 
     def __getitem__(self, index):
         index = self.index[index]
@@ -855,6 +949,7 @@ class AardvarkICDataset(Dataset):
         data_path=None,
         aux_data_path=None,
         encoder_predictions_path=None,
+        time_freq="6H",
     ):
         super().__init__()
 
@@ -864,6 +959,8 @@ class AardvarkICDataset(Dataset):
         self.encoder_predictions_path = (
             encoder_predictions_path or "path_to_encoder_predictions/"
         )
+        self.time_freq = time_freq
+        offset_factor = 4 if self.time_freq == "6H" else 1
 
         if lead_time == 0:
             # If leadtime is 0 load the output of the encoder
@@ -877,7 +974,7 @@ class AardvarkICDataset(Dataset):
                 print((start_date, end_date))
                 raise Exception("Invalid start and end date")
 
-            dates = pd.date_range(start_date, end_date, freq="6H")
+            dates = pd.date_range(start_date, end_date, freq=self.time_freq)
 
             self.data = np.memmap(
                 self.encoder_predictions_path + ic_fname,
@@ -898,7 +995,9 @@ class AardvarkICDataset(Dataset):
                 print((start_date, end_date))
                 raise Exception("Invalid start and end date.")
 
-            dates = pd.date_range(start_date, end_date, freq="6H")[(lead_time) * 4 :]
+            dates = pd.date_range(start_date, end_date, freq=self.time_freq)[
+                (lead_time) * offset_factor :
+            ]
             ic_shape = (len(dates), 121, 240, 24)
 
             self.data = np.memmap(
@@ -942,6 +1041,7 @@ class WeatherDatasetDownscaling(Dataset):
         lead_time=1,
         data_path=None,
         aux_data_path=None,
+        time_freq="6H",
     ):
         # The context mode determines whether we make use of ERA5 or our own ICs.
         if not context_mode in ["era5", "aardvark"]:
@@ -962,8 +1062,9 @@ class WeatherDatasetDownscaling(Dataset):
         self.era5_mode = era5_mode
         self.res = res
         self.context_mode = context_mode
+        self.time_freq = time_freq
 
-        self.dates = pd.date_range(start_date, end_date, freq="6H")
+        self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)
         self.index = np.array(range(len(self.dates)))
 
         # Load ERA5 data for pre-training
@@ -1002,6 +1103,7 @@ class WeatherDatasetDownscaling(Dataset):
             end_date=end_date,
             data_path=self.data_path,
             aux_data_path=self.aux_data_path,
+            time_freq=self.time_freq,
         )
 
         if context_mode == "aardvark":
@@ -1013,6 +1115,7 @@ class WeatherDatasetDownscaling(Dataset):
                 lead_time,
                 data_path=self.data_path,
                 aux_data_path=self.aux_data_path,
+                time_freq=self.time_freq,
             )
 
     def load_era5(self, year):
@@ -1178,6 +1281,7 @@ class ForecasterDatasetDownscaling(Dataset):
         region="global",
         data_path=None,
         aux_data_path=None,
+        time_freq="6H",
     ):
         super().__init__()
 
@@ -1193,9 +1297,10 @@ class ForecasterDatasetDownscaling(Dataset):
         self.mode = mode
         self.data_path = data_path or "path_to_data/"
         self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
+        self.time_freq = time_freq
         self.offset = np.timedelta64(lead_time, "D").astype("timedelta64[ns]")
 
-        self.dates = pd.date_range(start_date, end_date, freq="6H")[:-30]
+        self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)[:-30]
 
         # Normalisation
         self.means = np.load(self.aux_data_path + "norm_factors/mean_4u_1.npy")
@@ -1222,6 +1327,7 @@ class ForecasterDatasetDownscaling(Dataset):
             end_date=end_date,
             data_path=self.data_path,
             aux_data_path=self.aux_data_path,
+            time_freq=self.time_freq,
         )
 
         # Subset to region

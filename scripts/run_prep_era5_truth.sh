@@ -9,6 +9,7 @@ scriptdir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-publi
 OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
 GRID_DIR="${root_dir}/data/grid_lon_lat"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
+TIME_FREQ="6H"  # use "1D" for daily 00 UTC outputs
 
 # --- Surface/single-level fields (example) ---
 INPUT_DIR_SFC="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/single_level"
@@ -41,7 +42,8 @@ python ${scriptdir}/prep_era5_truth.py \
   --era5_mode "${ERA5_MODE_SFC}" \
   --variables "${VARS_SFC[@]}" \
   --years "${YEARS[@]}" \
-  --grid_dir "${GRID_DIR}"
+  --grid_dir "${GRID_DIR}" \
+  --time_freq "${TIME_FREQ}"
 
 # Run pressure-level
 python ${scriptdir}/prep_era5_truth.py \
@@ -50,6 +52,7 @@ python ${scriptdir}/prep_era5_truth.py \
   --era5_mode "${ERA5_MODE_PL}" \
   --variables "${VARS_PL[@]}" \
   --years "${YEARS[@]}" \
-  --grid_dir "${GRID_DIR}"
+  --grid_dir "${GRID_DIR}" \
+  --time_freq "${TIME_FREQ}"
 
 echo "Done. ERA5 memmaps are under ${OUTPUT_DIR}/era5 and norms under ${OUTPUT_DIR}/norm_factors."
