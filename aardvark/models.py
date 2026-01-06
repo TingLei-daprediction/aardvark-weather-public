@@ -32,6 +32,7 @@ class ConvCNPWeather(nn.Module):
         two_frames=False,
         amsua_channels=13,
         amsub_channels=12,
+        hirs_channels=26,
     ):
 
         super().__init__()
@@ -50,6 +51,7 @@ class ConvCNPWeather(nn.Module):
         self.two_frames = two_frames
         self.amsua_channels = amsua_channels
         self.amsub_channels = amsub_channels
+        self.hirs_channels = hirs_channels
 
         N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
         N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
@@ -90,7 +92,7 @@ class ConvCNPWeather(nn.Module):
         ]
         self.hirs_setconvs = [
             convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
-            for _ in range(26)
+            for _ in range(self.hirs_channels)
         ]
 
         self.sat_setconvs = [
@@ -251,7 +253,7 @@ class ConvCNPWeather(nn.Module):
         encodings = []
 
         task["hirs_{}".format(prefix)][task["hirs_{}".format(prefix)] == 0] = np.nan
-        for i in range(26):
+        for i in range(self.hirs_channels):
             encodings.append(
                 self.hirs_setconvs[i](
                     x_in=task["hirs_x_{}".format(prefix)],

@@ -70,13 +70,14 @@ def expected_in_channels_assimilation(
     amsub_channels,
     iasi_channels,
     ascat_channels,
+    hirs_channels,
     disable_igra,
     two_frames,
 ):
     # convDeepSet encoders output density + value per channel (2x).
     amsua = 2 * amsua_channels
     amsub = 2 * amsub_channels
-    hirs = 2 * 26
+    hirs = 2 * hirs_channels
     sat = 2 * 2
     icoads = 2 * 5
     hadisd = 2 * 4
@@ -288,11 +289,15 @@ def main(rank, world_size, output_dir, args):
         ascat_channels = args.ascat_channels
         if ascat_channels is None:
             ascat_channels = 15 if args.time_freq != "6H" else 17
+        hirs_channels = args.hirs_channels
+        if hirs_channels is None:
+            hirs_channels = 20 if args.time_freq != "6H" else 26
         expected_in_channels = expected_in_channels_assimilation(
             amsua_channels,
             amsub_channels,
             iasi_channels,
             ascat_channels,
+            hirs_channels,
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
         )
@@ -317,6 +322,7 @@ def main(rank, world_size, output_dir, args):
             data_path=args.model_data_path,
             amsua_channels=amsua_channels,
             amsub_channels=amsub_channels,
+            hirs_channels=hirs_channels,
         )
 
     # Instantiate loaders
@@ -394,6 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--amsub_channels", type=int, default=None)
     parser.add_argument("--iasi_channels", type=int, default=None)
     parser.add_argument("--ascat_channels", type=int, default=None)
+    parser.add_argument("--hirs_channels", type=int, default=None)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
