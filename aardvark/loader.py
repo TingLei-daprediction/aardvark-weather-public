@@ -152,6 +152,11 @@ class WeatherDataset(Dataset):
             raise ValueError(f"File size not divisible by expected frame size: {path}")
         return file_bytes // denom
 
+    def _era5_grid_axes(self):
+        lon = np.load(self.data_path + f"era5/era5_x_{self.res}.npy")
+        lat = np.load(self.data_path + f"era5/era5_y_{self.res}.npy")
+        return lon.astype(np.float32), lat.astype(np.float32)
+
     def load_icoads(self):
         """
         Load the ICOADS data
@@ -172,19 +177,30 @@ class WeatherDataset(Dataset):
 
         icoads_x_path = self.data_path + "icoads/1999_2021_icoads_x.mmap"
         icoads_x_shape = list(ICOADS_X_SHAPE)
-        if self.time_freq != "6H":
-            icoads_x_shape[0] = self._infer_time_dim(
-                icoads_x_path, icoads_x_shape[1:]
+        static_shape = (ICOADS_X_SHAPE[2], ICOADS_X_SHAPE[1])
+        file_bytes = os.path.getsize(icoads_x_path)
+        if file_bytes == np.prod(static_shape) * 4:
+            icoads_x = np.memmap(
+                icoads_x_path,
+                dtype="float32",
+                mode="r",
+                shape=static_shape,
             )
-        self.icoads_x = (
-            np.memmap(
+            self.icoads_x = icoads_x / LATLON_SCALE_FACTOR
+            self.icoads_x_is_static = True
+        else:
+            if self.time_freq != "6H":
+                icoads_x_shape[0] = self._infer_time_dim(
+                    icoads_x_path, icoads_x_shape[1:]
+                )
+            icoads_x = np.memmap(
                 icoads_x_path,
                 dtype="float32",
                 mode="r",
                 shape=tuple(icoads_x_shape),
             )
-            / LATLON_SCALE_FACTOR
-        )
+            self.icoads_x = icoads_x / LATLON_SCALE_FACTOR
+            self.icoads_x_is_static = False
         self.icoads_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_icoads.npy")
         )
@@ -245,7 +261,9 @@ class WeatherDataset(Dataset):
         amsua_path = self.data_path + "amsua/2007_2021_amsua.mmap"
         amsua_shape = list(AMSUA_Y_SHAPE)
         if self.time_freq != "6H":
-            amsua_shape[0] = self._infer_time_dim(amsua_path, amsua_shape[1:])
+            lon, lat = self._era5_grid_axes()
+            amsua_shape = [self._infer_time_dim(amsua_path, [len(lat), len(lon), amsua_shape[3]]),
+                           len(lat), len(lon), amsua_shape[3]]
         self.amsua_y = np.memmap(
             amsua_path,
             dtype="float32",
@@ -254,10 +272,15 @@ class WeatherDataset(Dataset):
         )
         self.amsua_index_offset = self.offsets["amsua"][self.start_date]
 
-        xx = np.linspace(-180, 179, 360, dtype=np.float32)
-        xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
-        yy = np.linspace(90, -90, 180, dtype=np.float32) / LATLON_SCALE_FACTOR
-        self.amsua_x = [xx, yy]
+        if self.time_freq != "6H":
+            lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
+            lat = lat / LATLON_SCALE_FACTOR
+            self.amsua_x = [lon, lat]
+        else:
+            xx = np.linspace(-180, 179, 360, dtype=np.float32)
+            xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
+            yy = np.linspace(90, -90, 180, dtype=np.float32) / LATLON_SCALE_FACTOR
+            self.amsua_x = [xx, yy]
 
         self.amsua_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_amsua.npy")
@@ -276,7 +299,9 @@ class WeatherDataset(Dataset):
         amsub_path = self.data_path + "amsub_mhs/2007_2021_amsub.mmap"
         amsub_shape = list(AMSUB_Y_SHAPE)
         if self.time_freq != "6H":
-            amsub_shape[0] = self._infer_time_dim(amsub_path, amsub_shape[1:])
+            lon, lat = self._era5_grid_axes()
+            amsub_shape = [self._infer_time_dim(amsub_path, [len(lon), len(lat), amsub_shape[3]]),
+                           len(lon), len(lat), amsub_shape[3]]
         self.amsub_y = np.memmap(
             amsub_path,
             dtype="float32",
@@ -285,10 +310,15 @@ class WeatherDataset(Dataset):
         )
         self.amsub_index_offset = self.offsets["amsub"][self.start_date]
 
-        xx = np.linspace(0, 359, 360, dtype=np.float32)
-        xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
-        yy = np.linspace(90, -90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
-        self.amsub_x = [xx, yy]
+        if self.time_freq != "6H":
+            lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
+            lat = lat / LATLON_SCALE_FACTOR
+            self.amsub_x = [lon, lat]
+        else:
+            xx = np.linspace(0, 359, 360, dtype=np.float32)
+            xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
+            yy = np.linspace(90, -90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
+            self.amsub_x = [xx, yy]
 
         self.amsub_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_amsub.npy")
@@ -307,7 +337,9 @@ class WeatherDataset(Dataset):
         ascat_path = self.data_path + "ascat/2007_2021_ascat.mmap"
         ascat_shape = list(ASCAT_Y_SHAPE)
         if self.time_freq != "6H":
-            ascat_shape[0] = self._infer_time_dim(ascat_path, ascat_shape[1:])
+            lon, lat = self._era5_grid_axes()
+            ascat_shape = [self._infer_time_dim(ascat_path, [len(lon), len(lat), ascat_shape[3]]),
+                           len(lon), len(lat), ascat_shape[3]]
         self.ascat_y = np.memmap(
             ascat_path,
             dtype="float32",
@@ -316,10 +348,15 @@ class WeatherDataset(Dataset):
         )
         self.ascat_index_offset = self.offsets["ascat"][self.start_date]
 
-        xx = np.linspace(0, 359, 360, dtype=np.float32)
-        xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
-        yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
-        self.ascat_x = [xx, np.copy(yy[::-1])]
+        if self.time_freq != "6H":
+            lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
+            lat = lat / LATLON_SCALE_FACTOR
+            self.ascat_x = [lon, np.copy(lat[::-1])]
+        else:
+            xx = np.linspace(0, 359, 360, dtype=np.float32)
+            xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
+            yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
+            self.ascat_x = [xx, np.copy(yy[::-1])]
 
         self.ascat_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_ascat.npy")
@@ -338,7 +375,9 @@ class WeatherDataset(Dataset):
         hirs_path = self.data_path + "hirs/2007_2021_hirs.mmap"
         hirs_shape = list(HIRS_Y_SHAPE)
         if self.time_freq != "6H":
-            hirs_shape[0] = self._infer_time_dim(hirs_path, hirs_shape[1:])
+            lon, lat = self._era5_grid_axes()
+            hirs_shape = [self._infer_time_dim(hirs_path, [len(lon), len(lat), hirs_shape[3]]),
+                          len(lon), len(lat), hirs_shape[3]]
         self.hirs_y = np.memmap(
             hirs_path,
             dtype="float32",
@@ -347,10 +386,15 @@ class WeatherDataset(Dataset):
         )
         self.hirs_index_offset = self.offsets["ascat"][self.start_date]
 
-        xx = np.linspace(0, 359, 360, dtype=np.float32)
-        xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
-        yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
-        self.hirs_x = [xx, np.copy(yy[::-1])]
+        if self.time_freq != "6H":
+            lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
+            lat = lat / LATLON_SCALE_FACTOR
+            self.hirs_x = [lon, np.copy(lat[::-1])]
+        else:
+            xx = np.linspace(0, 359, 360, dtype=np.float32)
+            xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
+            yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
+            self.hirs_x = [xx, np.copy(yy[::-1])]
 
         self.hirs_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/hirs_means.npy")
@@ -399,7 +443,9 @@ class WeatherDataset(Dataset):
         iasi_path = self.data_path + "2007_2021_iasi_subset.mmap"
         iasi_shape = list(IASI_Y_SHAPE)
         if self.time_freq != "6H":
-            iasi_shape[0] = self._infer_time_dim(iasi_path, iasi_shape[1:])
+            lon, lat = self._era5_grid_axes()
+            iasi_shape = [self._infer_time_dim(iasi_path, [len(lon), len(lat), iasi_shape[3]]),
+                          len(lon), len(lat), iasi_shape[3]]
         self.iasi = np.memmap(
             iasi_path,
             dtype="float32",
@@ -408,10 +454,15 @@ class WeatherDataset(Dataset):
         )
         self.iasi_index_offset = self.offsets["ascat"][self.start_date]
 
-        xx = np.linspace(0, 359, 360, dtype=np.float32)
-        xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
-        yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
-        self.iasi_x = [xx, np.copy(yy[::-1])]
+        if self.time_freq != "6H":
+            lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
+            lat = lat / LATLON_SCALE_FACTOR
+            self.iasi_x = [lon, np.copy(lat[::-1])]
+        else:
+            xx = np.linspace(0, 359, 360, dtype=np.float32)
+            xx = ((xx + 360) % 360) / LATLON_SCALE_FACTOR
+            yy = np.linspace(-90, 90, 181, dtype=np.float32) / LATLON_SCALE_FACTOR
+            self.iasi_x = [xx, np.copy(yy[::-1])]
 
         self.iasi_means = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/mean_iasi.npy")
@@ -703,9 +754,12 @@ class WeatherDatasetAssimilation(WeatherDataset):
         date = self.dates[index]
 
         # ICOADS
-        icoads_x = self.icoads_x[index + self.icoads_index_offset, ...]
         icoads_y = self.icoads_y[index + self.icoads_index_offset, ...]
-        icoads_x = [icoads_x[0, :], icoads_x[1, :]]
+        if getattr(self, "icoads_x_is_static", False):
+            icoads_x = [self.icoads_x[:, 0], self.icoads_x[:, 1]]
+        else:
+            icoads_x = self.icoads_x[index + self.icoads_index_offset, ...]
+            icoads_x = [icoads_x[0, :], icoads_x[1, :]]
         icoads_x = [self.to_tensor(i) for i in icoads_x]
         icoads_y = self.to_tensor(icoads_y)
         icoads_y = self.norm_data(icoads_y, self.icoads_means, self.icoads_stds)
