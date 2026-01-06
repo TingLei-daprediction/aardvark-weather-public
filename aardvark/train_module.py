@@ -65,10 +65,12 @@ def end_date(name):
         raise Exception(f"Unrecognised split name {name}")
 
 
-def expected_in_channels_assimilation(amsua_channels, disable_igra, two_frames):
+def expected_in_channels_assimilation(
+    amsua_channels, amsub_channels, disable_igra, two_frames
+):
     # convDeepSet encoders output density + value per channel (2x).
     amsua = 2 * amsua_channels
-    amsub = 2 * 12
+    amsub = 2 * amsub_channels
     hirs = 2 * 26
     sat = 2 * 2
     icoads = 2 * 5
@@ -272,8 +274,12 @@ def main(rank, world_size, output_dir, args):
         amsua_channels = args.amsua_channels
         if amsua_channels is None:
             amsua_channels = 11 if args.time_freq != "6H" else 13
+        amsub_channels = args.amsub_channels
+        if amsub_channels is None:
+            amsub_channels = 5 if args.time_freq != "6H" else 12
         expected_in_channels = expected_in_channels_assimilation(
             amsua_channels,
+            amsub_channels,
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
         )
@@ -297,6 +303,7 @@ def main(rank, world_size, output_dir, args):
             two_frames=bool(args.two_frames),
             data_path=args.model_data_path,
             amsua_channels=amsua_channels,
+            amsub_channels=amsub_channels,
         )
 
     # Instantiate loaders
@@ -371,6 +378,7 @@ if __name__ == "__main__":
     parser.add_argument("--disable_igra", type=int, default=0)
     parser.add_argument("--time_freq", default="6H")
     parser.add_argument("--amsua_channels", type=int, default=None)
+    parser.add_argument("--amsub_channels", type=int, default=None)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
