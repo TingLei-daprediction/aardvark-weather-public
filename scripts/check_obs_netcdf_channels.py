@@ -36,7 +36,8 @@ def report(name, path, prefixes=None, explicit_list=None):
 
 def main():
     p = argparse.ArgumentParser(description="Check obs NetCDF channel counts")
-    p.add_argument("--input_dir", required=True, help="Dir containing *_data_v1.nc files")
+    p.add_argument("--input_dir", default="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/aardvark-weather/training_data/"
+                   , help="Dir containing *_data_v1.nc files")
     args = p.parse_args()
     inp = Path(args.input_dir)
 
