@@ -26,3 +26,6 @@ Notes
 - If using daily obs, either generate daily ERA5 truth with run_prep_era5_truth.sh TIME_FREQ=1D
   (outputs era5_*_1d_<year>.memmap) or adapt accordingly.
 - IGRA daily data mismatch can be bypassed with --disable_igra 1.
+- Density channel: convDeepSet adds a per-input-channel density mask (1 where valid, 0 where NaN).
+  This doubles channels for convDeepSet-based encoders (AMSU-A/B, HIRS, SAT, ICOADS, HadISD, IGRA);
+  ASCAT/IASI are gridded interpolations and do not get density doubling.

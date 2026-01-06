@@ -65,6 +65,25 @@ def end_date(name):
         raise Exception(f"Unrecognised split name {name}")
 
 
+def expected_in_channels_assimilation(amsua_channels, disable_igra, two_frames):
+    # convDeepSet encoders output density + value per channel (2x).
+    amsua = 2 * amsua_channels
+    amsub = 2 * 12
+    hirs = 2 * 26
+    sat = 2 * 2
+    icoads = 2 * 5
+    hadisd = 2 * 4
+    igra = 0 if disable_igra else 2 * 24
+    ascat = 17
+    iasi = 52
+
+    obs_total = amsua + amsub + hirs + sat + icoads + hadisd + igra + ascat + iasi
+    aux_total = 4 + 24 + 5  # elev vars + climatology + aux time channels
+    if two_frames:
+        return obs_total * 2 + aux_total
+    return obs_total + aux_total
+
+
 def main(rank, world_size, output_dir, args):
     """
     Primary training script for the encoder, processor and decoder modules.
@@ -250,6 +269,21 @@ def main(rank, world_size, output_dir, args):
             data_path=args.model_data_path,
         )
     else:
+        amsua_channels = args.amsua_channels
+        if amsua_channels is None:
+            amsua_channels = 11 if args.time_freq != "6H" else 13
+        expected_in_channels = expected_in_channels_assimilation(
+            amsua_channels,
+            disable_igra=bool(args.disable_igra),
+            two_frames=bool(args.two_frames),
+        )
+        if args.in_channels is None:
+            args.in_channels = expected_in_channels
+        elif args.in_channels != expected_in_channels:
+            raise ValueError(
+                f"in_channels={args.in_channels} does not match expected "
+                f"{expected_in_channels} for current settings"
+            )
         model = ConvCNPWeather(
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
@@ -262,6 +296,7 @@ def main(rank, world_size, output_dir, args):
             film=bool(args.film),
             two_frames=bool(args.two_frames),
             data_path=args.model_data_path,
+            amsua_channels=amsua_channels,
         )
 
     # Instantiate loaders
@@ -335,6 +370,7 @@ if __name__ == "__main__":
     parser.add_argument("--end_ind", type=int, default=24)
     parser.add_argument("--disable_igra", type=int, default=0)
     parser.add_argument("--time_freq", default="6H")
+    parser.add_argument("--amsua_channels", type=int, default=None)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")

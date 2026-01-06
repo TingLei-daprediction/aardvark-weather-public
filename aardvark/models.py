@@ -30,6 +30,7 @@ class ConvCNPWeather(nn.Module):
         decoder=None,
         film=False,
         two_frames=False,
+        amsua_channels=13,
     ):
 
         super().__init__()
@@ -46,6 +47,7 @@ class ConvCNPWeather(nn.Module):
         self.mode = mode
         self.film = film
         self.two_frames = two_frames
+        self.amsua_channels = amsua_channels
 
         N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
         N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
@@ -78,7 +80,7 @@ class ConvCNPWeather(nn.Module):
         )
         self.amsua_setconvs = [
             convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
-            for _ in range(13)
+            for _ in range(self.amsua_channels)
         ]
         self.amsub_setconvs = [
             convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
@@ -124,7 +126,7 @@ class ConvCNPWeather(nn.Module):
 
         elif self.decoder == "vit_assimilation":
             self.decoder_lr = ViT(
-                in_channels=256,
+                in_channels=self.in_channels,
                 out_channels=out_channels,
                 h_channels=512,  # clt_hard-wired ViT hidden width
                 depth=8,  # clt_hard-wired ViT depth
@@ -204,7 +206,7 @@ class ConvCNPWeather(nn.Module):
         encodings = []
         task["amsua_{}".format(prefix)][..., -1] = np.nan
         task["amsua_{}".format(prefix)][task["amsua_{}".format(prefix)] == 0] = np.nan
-        for i in range(13):
+        for i in range(self.amsua_channels):
             encodings.append(
                 self.amsua_setconvs[i](
                     x_in=task["amsua_x_{}".format(prefix)],
@@ -227,7 +229,7 @@ class ConvCNPWeather(nn.Module):
         task["amsub_{}".format(prefix)][task["amsub_{}".format(prefix)] == 0] = np.nan
         for i in range(12):
             encodings.append(
-                self.amsua_setconvs[i](
+                self.amsub_setconvs[i](
                     x_in=task["amsub_x_{}".format(prefix)],
                     wt=task["amsub_{}".format(prefix)].permute(0, 3, 1, 2)[
                         :, i : i + 1, ...
