@@ -7,12 +7,22 @@ Aardvark context summary (codex)
   in_channels=277, out_channels=24, int_channels=24, decoder=vit_assimilation, loss=lw_rmse.
 - Model grid files (era5_x/y) are read from model_data_path (defaults to ../data/).
 
-Key code edits in this session:
-- aardvark/models.py: added clt_hard-wired comments on fixed constants.
-- aardvark/train_module.py: wired data paths and assimilation date window CLI args; added model_data_path.
-- aardvark/loader.py: data/aux paths now parameterized for WeatherDataset, WeatherDatasetAssimilation,
-  WeatherDatasetDownscaling, HadISDDataset, ForecastLoader, ForecasterDatasetDownscaling, AardvarkICDataset.
+Key data frequency context
+- Original obs NetCDFs (amsua/amsub/ascat/hirs/gridsat/igra/icoads/hadisd/iasi) are daily at 00 UTC.
+  Time range: 2007-01-02 -> 2019-12-30, time length 4746.
+- Added --time_freq (default 6H). Use --time_freq 1D to align loaders to daily obs.
+- Loader offsets now support 6H or 1D via build_offsets in aardvark/loader_utils_new.py.
+- Daily ERA5 truth outputs use filename tag _1d_ in prep_era5_truth.py; 6-hourly uses _6_.
 
-Notes:
-- DDP setup uses MASTER_ADDR/MASTER_PORT and one process per GPU.
-- Loader defaults still fall back to placeholder paths if not provided.
+Key code edits in this session
+- aardvark/models.py: added clt_hard-wired comments on fixed constants; IGRA optional encoding zeros when disabled.
+- aardvark/train_module.py: wired data paths and assimilation date window CLI args; added model_data_path;
+  added --disable_igra and --time_freq flags.
+- aardvark/loader.py: data/aux paths now parameterized; daily-mode time_freq support; optional IGRA.
+- aardvark/loader_utils_new.py: build_offsets(freq) added (6H vs 1D).
+- aardvark/trainer.py: checkpoint loading added (warn and continue if missing) and conflict markers resolved.
+
+Notes
+- If using daily obs, either generate daily ERA5 truth with run_prep_era5_truth.sh TIME_FREQ=1D
+  (outputs era5_*_1d_<year>.memmap) or adapt accordingly.
+- IGRA daily data mismatch can be bypassed with --disable_igra 1.
