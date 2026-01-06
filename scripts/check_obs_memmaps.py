@@ -62,15 +62,18 @@ def report_npy(name, path):
 def main():
     p = argparse.ArgumentParser(description="Check observation memmaps and sizes")
     p.add_argument("--data_path", required=True, help="Root of observation memmaps")
+    p.add_argument("--time_freq", default="6H", help="6H or 1D")
     args = p.parse_args()
+    use_daily = args.time_freq != "6H"
 
     root = Path(args.data_path)
+    print(f"Using time_freq={args.time_freq}")
 
     # Station data
     report_memmap(
         "IGRA_Y",
         root / "igra/1999_2021_igra_y.mmap",
-        data_shapes.IGRA_Y_SHAPE,
+        data_shapes.IGRA_Y_SHAPE_1D if use_daily else data_shapes.IGRA_Y_SHAPE,
     )
     report_memmap(
         "IGRA_X",
@@ -80,44 +83,44 @@ def main():
     report_memmap(
         "ICOADS_Y",
         root / "icoads/1999_2021_icoads_y.mmap",
-        data_shapes.ICOADS_Y_SHAPE,
+        data_shapes.ICOADS_Y_SHAPE_1D if use_daily else data_shapes.ICOADS_Y_SHAPE,
     )
     report_memmap(
         "ICOADS_X",
         root / "icoads/1999_2021_icoads_x.mmap",
-        data_shapes.ICOADS_X_SHAPE,
+        data_shapes.ICOADS_X_SHAPE_1D if use_daily else data_shapes.ICOADS_X_SHAPE,
     )
 
     # Gridded obs
     report_memmap(
         "AMSU-A",
         root / "amsua/2007_2021_amsua.mmap",
-        data_shapes.AMSUA_Y_SHAPE,
+        data_shapes.AMSUA_Y_SHAPE_1D if use_daily else data_shapes.AMSUA_Y_SHAPE,
     )
     report_memmap(
         "AMSU-B",
         root / "amsub_mhs/2007_2021_amsub.mmap",
-        data_shapes.AMSUB_Y_SHAPE,
+        data_shapes.AMSUB_Y_SHAPE_1D if use_daily else data_shapes.AMSUB_Y_SHAPE,
     )
     report_memmap(
         "ASCAT",
         root / "ascat/2007_2021_ascat.mmap",
-        data_shapes.ASCAT_Y_SHAPE,
+        data_shapes.ASCAT_Y_SHAPE_1D if use_daily else data_shapes.ASCAT_Y_SHAPE,
     )
     report_memmap(
         "HIRS",
         root / "hirs/2007_2021_hirs.mmap",
-        data_shapes.HIRS_Y_SHAPE,
+        data_shapes.HIRS_Y_SHAPE_1D if use_daily else data_shapes.HIRS_Y_SHAPE,
     )
     report_memmap(
         "GRIDSAT",
         root / "gridsat/gridsat_data.mmap",
-        data_shapes.GRIDSAT_Y_SHAPE,
+        data_shapes.GRIDSAT_Y_SHAPE_1D if use_daily else data_shapes.GRIDSAT_Y_SHAPE,
     )
     report_memmap(
         "IASI",
         root / "2007_2021_iasi_subset.mmap",
-        data_shapes.IASI_Y_SHAPE,
+        data_shapes.IASI_Y_SHAPE_1D if use_daily else data_shapes.IASI_Y_SHAPE,
     )
 
     # Satellite grid coords
