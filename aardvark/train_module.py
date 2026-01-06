@@ -66,7 +66,7 @@ def end_date(name):
 
 
 def expected_in_channels_assimilation(
-    amsua_channels, amsub_channels, disable_igra, two_frames
+    amsua_channels, amsub_channels, iasi_channels, disable_igra, two_frames
 ):
     # convDeepSet encoders output density + value per channel (2x).
     amsua = 2 * amsua_channels
@@ -77,7 +77,7 @@ def expected_in_channels_assimilation(
     hadisd = 2 * 4
     igra = 0 if disable_igra else 2 * 24
     ascat = 17
-    iasi = 52
+    iasi = iasi_channels
 
     obs_total = amsua + amsub + hirs + sat + icoads + hadisd + igra + ascat + iasi
     aux_total = 4 + 24 + 5  # elev vars + climatology + aux time channels
@@ -277,9 +277,13 @@ def main(rank, world_size, output_dir, args):
         amsub_channels = args.amsub_channels
         if amsub_channels is None:
             amsub_channels = 5 if args.time_freq != "6H" else 12
+        iasi_channels = args.iasi_channels
+        if iasi_channels is None:
+            iasi_channels = 45 if args.time_freq != "6H" else 52
         expected_in_channels = expected_in_channels_assimilation(
             amsua_channels,
             amsub_channels,
+            iasi_channels,
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
         )
@@ -379,6 +383,7 @@ if __name__ == "__main__":
     parser.add_argument("--time_freq", default="6H")
     parser.add_argument("--amsua_channels", type=int, default=None)
     parser.add_argument("--amsub_channels", type=int, default=None)
+    parser.add_argument("--iasi_channels", type=int, default=None)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
