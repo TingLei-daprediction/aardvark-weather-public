@@ -267,6 +267,7 @@ class WeatherDataset(Dataset):
         self.amsua_index_offset = self.offsets["amsua"][self.start_date]
 
         if self.time_freq != "6H":
+            lon, lat = self._era5_grid_axes()
             lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
             lat = lat / LATLON_SCALE_FACTOR
             self.amsua_x = [lon, lat]
@@ -303,6 +304,7 @@ class WeatherDataset(Dataset):
         self.amsub_index_offset = self.offsets["amsub"][self.start_date]
 
         if self.time_freq != "6H":
+            lon, lat = self._era5_grid_axes()
             lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
             lat = lat / LATLON_SCALE_FACTOR
             self.amsub_x = [lon, lat]
@@ -339,6 +341,7 @@ class WeatherDataset(Dataset):
         self.ascat_index_offset = self.offsets["ascat"][self.start_date]
 
         if self.time_freq != "6H":
+            lon, lat = self._era5_grid_axes()
             lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
             lat = lat / LATLON_SCALE_FACTOR
             self.ascat_x = [lon, np.copy(lat[::-1])]
@@ -375,6 +378,7 @@ class WeatherDataset(Dataset):
         self.hirs_index_offset = self.offsets["ascat"][self.start_date]
 
         if self.time_freq != "6H":
+            lon, lat = self._era5_grid_axes()
             lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
             lat = lat / LATLON_SCALE_FACTOR
             self.hirs_x = [lon, np.copy(lat[::-1])]
@@ -441,6 +445,7 @@ class WeatherDataset(Dataset):
         self.iasi_index_offset = self.offsets["ascat"][self.start_date]
 
         if self.time_freq != "6H":
+            lon, lat = self._era5_grid_axes()
             lon = ((lon + 360) % 360) / LATLON_SCALE_FACTOR
             lat = lat / LATLON_SCALE_FACTOR
             self.iasi_x = [lon, np.copy(lat[::-1])]
