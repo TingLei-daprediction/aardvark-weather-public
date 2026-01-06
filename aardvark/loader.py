@@ -163,11 +163,9 @@ class WeatherDataset(Dataset):
         """
 
         icoads_y_path = self.data_path + "icoads/1999_2021_icoads_y.mmap"
-        icoads_y_shape = list(ICOADS_Y_SHAPE)
-        if self.time_freq != "6H":
-            icoads_y_shape[0] = self._infer_time_dim(
-                icoads_y_path, icoads_y_shape[1:]
-            )
+        icoads_y_shape = list(
+            ICOADS_Y_SHAPE_1D if self.time_freq != "6H" else ICOADS_Y_SHAPE
+        )
         self.icoads_y = np.memmap(
             icoads_y_path,
             dtype="float32",
@@ -176,8 +174,10 @@ class WeatherDataset(Dataset):
         )
 
         icoads_x_path = self.data_path + "icoads/1999_2021_icoads_x.mmap"
-        icoads_x_shape = list(ICOADS_X_SHAPE)
-        static_shape = (ICOADS_X_SHAPE[2], ICOADS_X_SHAPE[1])
+        icoads_x_shape = list(
+            ICOADS_X_SHAPE_1D if self.time_freq != "6H" else ICOADS_X_SHAPE
+        )
+        static_shape = (icoads_x_shape[2], icoads_x_shape[1])
         file_bytes = os.path.getsize(icoads_x_path)
         if file_bytes == np.prod(static_shape) * 4:
             icoads_x = np.memmap(
@@ -189,10 +189,6 @@ class WeatherDataset(Dataset):
             self.icoads_x = icoads_x / LATLON_SCALE_FACTOR
             self.icoads_x_is_static = True
         else:
-            if self.time_freq != "6H":
-                icoads_x_shape[0] = self._infer_time_dim(
-                    icoads_x_path, icoads_x_shape[1:]
-                )
             icoads_x = np.memmap(
                 icoads_x_path,
                 dtype="float32",
@@ -222,9 +218,9 @@ class WeatherDataset(Dataset):
         """
 
         igra_y_path = self.data_path + "igra/1999_2021_igra_y.mmap"
-        igra_y_shape = list(IGRA_Y_SHAPE)
-        if self.time_freq != "6H":
-            igra_y_shape[0] = self._infer_time_dim(igra_y_path, igra_y_shape[1:])
+        igra_y_shape = list(
+            IGRA_Y_SHAPE_1D if self.time_freq != "6H" else IGRA_Y_SHAPE
+        )
         self.igra_y = np.memmap(
             igra_y_path,
             dtype="float32",
@@ -261,9 +257,7 @@ class WeatherDataset(Dataset):
         amsua_path = self.data_path + "amsua/2007_2021_amsua.mmap"
         amsua_shape = list(AMSUA_Y_SHAPE)
         if self.time_freq != "6H":
-            lon, lat = self._era5_grid_axes()
-            amsua_shape = [self._infer_time_dim(amsua_path, [len(lat), len(lon), amsua_shape[3]]),
-                           len(lat), len(lon), amsua_shape[3]]
+            amsua_shape = list(AMSUA_Y_SHAPE_1D)
         self.amsua_y = np.memmap(
             amsua_path,
             dtype="float32",
@@ -299,9 +293,7 @@ class WeatherDataset(Dataset):
         amsub_path = self.data_path + "amsub_mhs/2007_2021_amsub.mmap"
         amsub_shape = list(AMSUB_Y_SHAPE)
         if self.time_freq != "6H":
-            lon, lat = self._era5_grid_axes()
-            amsub_shape = [self._infer_time_dim(amsub_path, [len(lon), len(lat), amsub_shape[3]]),
-                           len(lon), len(lat), amsub_shape[3]]
+            amsub_shape = list(AMSUB_Y_SHAPE_1D)
         self.amsub_y = np.memmap(
             amsub_path,
             dtype="float32",
@@ -337,9 +329,7 @@ class WeatherDataset(Dataset):
         ascat_path = self.data_path + "ascat/2007_2021_ascat.mmap"
         ascat_shape = list(ASCAT_Y_SHAPE)
         if self.time_freq != "6H":
-            lon, lat = self._era5_grid_axes()
-            ascat_shape = [self._infer_time_dim(ascat_path, [len(lon), len(lat), ascat_shape[3]]),
-                           len(lon), len(lat), ascat_shape[3]]
+            ascat_shape = list(ASCAT_Y_SHAPE_1D)
         self.ascat_y = np.memmap(
             ascat_path,
             dtype="float32",
@@ -375,9 +365,7 @@ class WeatherDataset(Dataset):
         hirs_path = self.data_path + "hirs/2007_2021_hirs.mmap"
         hirs_shape = list(HIRS_Y_SHAPE)
         if self.time_freq != "6H":
-            lon, lat = self._era5_grid_axes()
-            hirs_shape = [self._infer_time_dim(hirs_path, [len(lon), len(lat), hirs_shape[3]]),
-                          len(lon), len(lat), hirs_shape[3]]
+            hirs_shape = list(HIRS_Y_SHAPE_1D)
         self.hirs_y = np.memmap(
             hirs_path,
             dtype="float32",
@@ -413,7 +401,7 @@ class WeatherDataset(Dataset):
         sat_path = self.data_path + "gridsat/gridsat_data.mmap"
         sat_shape = list(GRIDSAT_Y_SHAPE)
         if self.time_freq != "6H":
-            sat_shape[0] = self._infer_time_dim(sat_path, sat_shape[1:])
+            sat_shape = list(GRIDSAT_Y_SHAPE_1D)
         self.sat_y = np.memmap(
             sat_path,
             dtype="float32",
@@ -443,9 +431,7 @@ class WeatherDataset(Dataset):
         iasi_path = self.data_path + "2007_2021_iasi_subset.mmap"
         iasi_shape = list(IASI_Y_SHAPE)
         if self.time_freq != "6H":
-            lon, lat = self._era5_grid_axes()
-            iasi_shape = [self._infer_time_dim(iasi_path, [len(lon), len(lat), iasi_shape[3]]),
-                          len(lon), len(lat), iasi_shape[3]]
+            iasi_shape = list(IASI_Y_SHAPE_1D)
         self.iasi = np.memmap(
             iasi_path,
             dtype="float32",
