@@ -9,7 +9,8 @@ scriptdir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-publi
 OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
 GRID_DIR="${root_dir}/data/grid_lon_lat"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
-TIME_FREQ="6H"  # use "1D" for daily 00 UTC outputs
+#clt TIME_FREQ="6H"  # use "1D" for daily 00 UTC outputs
+TIME_FREQ="1D"  # use "1D" for daily 00 UTC outputs
 
 # --- Surface/single-level fields (example) ---
 INPUT_DIR_SFC="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/single_level"
