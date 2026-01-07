@@ -395,7 +395,7 @@ if __name__ == "__main__":
     parser.add_argument("--start_ind", type=int, default=0)
     parser.add_argument("--end_ind", type=int, default=24)
     parser.add_argument("--disable_igra", type=int, default=0)
-    parser.add_argument("--time_freq", default="6H")
+    parser.add_argument("--time_freq", default="1D")
     parser.add_argument("--amsua_channels", type=int, default=None)
     parser.add_argument("--amsub_channels", type=int, default=None)
     parser.add_argument("--iasi_channels", type=int, default=None)

@@ -181,13 +181,13 @@ def main():
         print(f"[INFO] Writing {memmap_path} with shape {arr.shape}")
         write_memmap(year, arr, memmap_path)
 
-        # Update running sums for mean/std (channel-wise)
+        # Update running sums for mean/std (per-channel over time+space)
         if sum_channels is None:
-            sum_channels = np.zeros(arr.shape[1:], dtype=np.float64)
-            sumsq_channels = np.zeros(arr.shape[1:], dtype=np.float64)
-        sum_channels += arr.sum(axis=0)
-        sumsq_channels += np.square(arr, dtype=np.float64).sum(axis=0)
-        count += arr.shape[0]
+            sum_channels = np.zeros((arr.shape[1],), dtype=np.float64)
+            sumsq_channels = np.zeros((arr.shape[1],), dtype=np.float64)
+        sum_channels += arr.sum(axis=(0, 2, 3))
+        sumsq_channels += np.square(arr, dtype=np.float64).sum(axis=(0, 2, 3))
+        count += arr.shape[0] * arr.shape[2] * arr.shape[3]
 
     if count == 0:
         print("[WARN] No data processed; exiting without norms.")

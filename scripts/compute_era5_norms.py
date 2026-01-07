@@ -2,7 +2,7 @@
 Compute mean/std for ERA5 memmaps already written to data_path/era5.
 
 Expected memmap layout:
-  era5/era5_<mode>_<res>_6_<year>.memmap with shape (time, channels, lon, lat)
+  era5/era5_<mode>_<res>_{6|1d}_<year>.memmap with shape (time, channels, lon, lat)
 
 Outputs:
   <output_dir>/norm_factors/mean_<mode>_<res>.npy
@@ -24,12 +24,14 @@ def parse_args():
     p.add_argument("--res", type=int, default=1)
     p.add_argument("--years", nargs="+", type=int, required=True)
     p.add_argument("--grid_dir", required=True, help="Dir with era5_x_<res>.npy and era5_y_<res>.npy")
+    p.add_argument("--time_freq", default="6H", help="6H or 1D")
     p.add_argument("--chunk", type=int, default=64, help="Time chunk size")
     return p.parse_args()
 
 
-def year_steps(year):
-    return (366 if year % 4 == 0 else 365) * 4
+def year_steps(year, time_freq):
+    factor = 4 if time_freq == "6H" else 1
+    return (366 if year % 4 == 0 else 365) * factor
 
 
 def infer_channels(memmap_path, t, lon, lat):
@@ -56,8 +58,9 @@ def main():
     count = 0
 
     for year in args.years:
-        t = year_steps(year)
-        memmap_path = data_dir / "era5" / f"era5_{args.era5_mode}_{args.res}_6_{year}.memmap"
+        t = year_steps(year, args.time_freq)
+        freq_tag = "6" if args.time_freq == "6H" else "1d"
+        memmap_path = data_dir / "era5" / f"era5_{args.era5_mode}_{args.res}_{freq_tag}_{year}.memmap"
         if not memmap_path.exists():
             print(f"[WARN] Missing memmap: {memmap_path}, skipping.")
             continue
@@ -66,15 +69,15 @@ def main():
         mmap = np.memmap(memmap_path, mode="r", dtype="float32", shape=(t, c, lon_len, lat_len))
 
         if sum_channels is None:
-            sum_channels = np.zeros((c, lon_len, lat_len), dtype=np.float64)
-            sumsq_channels = np.zeros((c, lon_len, lat_len), dtype=np.float64)
+            sum_channels = np.zeros((c,), dtype=np.float64)
+            sumsq_channels = np.zeros((c,), dtype=np.float64)
 
         for i in range(0, t, args.chunk):
             j = min(i + args.chunk, t)
             chunk = mmap[i:j]  # (chunk, c, lon, lat)
-            sum_channels += chunk.sum(axis=0)
-            sumsq_channels += np.square(chunk, dtype=np.float64).sum(axis=0)
-            count += chunk.shape[0]
+            sum_channels += chunk.sum(axis=(0, 2, 3))
+            sumsq_channels += np.square(chunk, dtype=np.float64).sum(axis=(0, 2, 3))
+            count += chunk.shape[0] * lon_len * lat_len
 
     if count == 0:
         raise RuntimeError("No data processed; check paths/years.")
