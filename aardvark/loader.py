@@ -203,11 +203,12 @@ class WeatherDataset(Dataset):
         self.icoads_stds = self.to_tensor(
             np.load(self.aux_data_path + "norm_factors/std_icoads.npy")
         )
+        window = 365 * (4 if self.time_freq == "6H" else 1)
         self.icoads_means = self.to_tensor(
-            np.nanmean(self.icoads_y[-365 * 4 :, ...], axis=(0, 2))[:, np.newaxis]
+            np.nanmean(self.icoads_y[-window:, ...], axis=(0, 2))[:, np.newaxis]
         )
         self.icoads_stds = self.to_tensor(
-            np.nanstd(self.icoads_y[-365 * 4 :, ...], axis=(0, 2))[:, np.newaxis]
+            np.nanstd(self.icoads_y[-window:, ...], axis=(0, 2))[:, np.newaxis]
         )
         self.icoads_index_offset = self.offsets["icoads"][self.start_date]
         return
@@ -660,8 +661,11 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         date = self.dates[index]
         year = date.year
-        hour = date.hour
-        doy = (date.dayofyear - 1) * 4 + (hour // 6)
+        if self.time_freq == "6H":
+            hour = date.hour
+            doy = (date.dayofyear - 1) * 4 + (hour // 6)
+        else:
+            doy = date.dayofyear - 1
 
         era5 = self.era5_sfc[year - int(self.start_date[:4])][doy, ...]
         era5 = np.copy(era5)
@@ -684,7 +688,10 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         date = self.dates[index]
         year = date.year
-        doy = (date.dayofyear - 1) * 4
+        if self.time_freq == "6H":
+            doy = (date.dayofyear - 1) * 4
+        else:
+            doy = date.dayofyear - 1
 
         next_date = self.dates[index + 1]
         next_year = next_date.year
@@ -815,7 +822,10 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         # AUxiliary variables
         aux_time = self.to_tensor(self.get_time_aux(date))
-        climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
+        if self.time_freq == "6H":
+            climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
+        else:
+            climatology = self.climatology[0, date.dayofyear - 1, ...]
 
         task = {
             "x_context_hadisd_{}".format(prefix): x_context_hadisd,
@@ -902,6 +912,10 @@ class HadISDDataset(Dataset):
         var = self.var
         mode = self.mode
 
+        lon = lon_to_0_360(
+            np.load(data_path + f"hadisd_processed/{var}_lon_{mode}.npy")
+        )
+        lat = np.load(data_path + f"hadisd_processed/{var}_lat_{mode}.npy")
         vals_path = data_path + f"hadisd_processed/{var}_vals_{mode}.memmap"
         if self.time_freq == "6H":
             shape = get_hadisd_shape(mode)
@@ -915,11 +929,6 @@ class HadISDDataset(Dataset):
             mode="r",
             shape=shape,
         )
-
-        lon = lon_to_0_360(
-            np.load(data_path + f"hadisd_processed/{var}_lon_{mode}.npy")
-        )
-        lat = np.load(data_path + f"hadisd_processed/{var}_lat_{mode}.npy")
         self.hadisd_x = np.stack([lon, lat], axis=-1) / LATLON_SCALE_FACTOR
         self.hadisd_alt = np.load(
             data_path + f"hadisd_processed/{var}_alt_{mode}_final.npy"
@@ -1108,6 +1117,7 @@ class WeatherDatasetDownscaling(Dataset):
         self.res = res
         self.context_mode = context_mode
         self.time_freq = time_freq
+        self.offset_factor = 4 if self.time_freq == "6H" else 1
 
         self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)
         self.index = np.array(range(len(self.dates)))
@@ -1169,9 +1179,9 @@ class WeatherDatasetDownscaling(Dataset):
         """
 
         if year % 4 == 0:
-            d = 366 * 4
+            d = 366 * self.offset_factor
         else:
-            d = 365 * 4
+            d = 365 * self.offset_factor
 
         if self.era5_mode == "sfc":
             levels = 4
@@ -1186,9 +1196,12 @@ class WeatherDatasetDownscaling(Dataset):
         elif self.res == 5:
             x = 64
             y = 32
+        freq_tag = "6" if self.time_freq == "6H" else "1d"
         mmap = np.memmap(
             self.data_path
-            + "era5/era5_{}_{}_6_{}.memmap".format(self.era5_mode, self.res, year),
+            + "era5/era5_{}_{}_{}_{}.memmap".format(
+                self.era5_mode, self.res, freq_tag, year
+            ),
             dtype="float32",
             mode="r",
             shape=(d, levels, x, y),
@@ -1210,7 +1223,7 @@ class WeatherDatasetDownscaling(Dataset):
         return (x - means) / stds
 
     def __len__(self):
-        return self.index.shape[0] - (self.lead_time) * 4
+        return self.index.shape[0] - (self.lead_time) * self.offset_factor
 
     def to_tensor(self, arr):
         return torch.from_numpy(np.array(arr)).float().to(self.device)
@@ -1240,8 +1253,11 @@ class WeatherDatasetDownscaling(Dataset):
 
         date = self.dates[index]
         year = date.year
-        hour = date.hour
-        doy = (date.dayofyear - 1) * 4 + (hour // 6)
+        if self.time_freq == "6H":
+            hour = date.hour
+            doy = (date.dayofyear - 1) * 4 + (hour // 6)
+        else:
+            doy = date.dayofyear - 1
 
         era5 = self.era5_sfc[year - int(self.start_date[:4])][doy, ...]
         era5 = np.copy(era5)
@@ -1258,10 +1274,10 @@ class WeatherDatasetDownscaling(Dataset):
     def __getitem__(self, index):
 
         index = self.index[index]
-        date = self.dates[index + 4 * self.lead_time]
+        date = self.dates[index + self.offset_factor * self.lead_time]
 
         # Get HadISD data
-        hadisd_slice = self.hadisd_data[index + 4 * self.lead_time]
+        hadisd_slice = self.hadisd_data[index + self.offset_factor * self.lead_time]
 
         # Get lon-lat
         x_context = self.era5_x
@@ -1274,7 +1290,7 @@ class WeatherDatasetDownscaling(Dataset):
         # Load the context (either aardvark or ERA5 for use in pre-training)
         if self.context_mode == "era5":
             y_context_obs = self.to_tensor(
-                self.load_era5_time(index + 4 * self.lead_time)
+                self.load_era5_time(index + self.offset_factor * self.lead_time)
             )
 
         elif self.context_mode == "aardvark":
@@ -1344,6 +1360,7 @@ class ForecasterDatasetDownscaling(Dataset):
         self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         self.time_freq = time_freq
         self.offset = np.timedelta64(lead_time, "D").astype("timedelta64[ns]")
+        self.offset_factor = 4 if self.time_freq == "6H" else 1
 
         self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)[:-30]
 
@@ -1394,10 +1411,10 @@ class ForecasterDatasetDownscaling(Dataset):
         Load the pre-saved Aardvark forecasts
         """
 
-        dates = pd.date_range(self.start_date, self.end_date, freq="6H")
+        dates = pd.date_range(self.start_date, self.end_date, freq=self.time_freq)
 
         if self.mode == "train":
-            dates = dates[:-40]  # Need 10 day offset at end of year
+            dates = dates[: -(10 * self.offset_factor)]  # Need 10 day offset at end of year
 
         self.Y_context = np.memmap(
             "path_to_forecasts/forecast_{}.mmap".format(self.mode),
@@ -1418,7 +1435,7 @@ class ForecasterDatasetDownscaling(Dataset):
         return self.hadisd_data.unnorm_pred(x)
 
     def __len__(self):
-        return len(self.dates) - 40  # Need 10 day offset at end of year
+        return len(self.dates) - (10 * self.offset_factor)  # Need 10 day offset at end of year
 
     def to_tensor(self, arr):
         return torch.from_numpy(np.array(arr)).float().to(self.device)
@@ -1445,7 +1462,7 @@ class ForecasterDatasetDownscaling(Dataset):
     def __getitem__(self, index):
 
         # Load target data
-        hadisd_slice = self.hadisd_data[index + 4 * self.lead_time]
+        hadisd_slice = self.hadisd_data[index + self.offset_factor * self.lead_time]
 
         x_context = self.era5_x
         n_lon = x_context[0].shape[0]

@@ -273,6 +273,10 @@ def main():
     coords_igra = np.stack([lon_igra, lat_igra], axis=-1).astype("float32")
     write_memmap(out_igra / "1999_2021_igra_x.mmap", coords_igra)
     save_norms(norms_dir, "igra", arr_igra, reduce_axes=(0, 2))
+    mean_igra = np.load(norms_dir / "mean_igra.npy").reshape(-1, 1)
+    std_igra = np.load(norms_dir / "std_igra.npy").reshape(-1, 1)
+    np.save(norms_dir / "mean_igra.npy", mean_igra)
+    np.save(norms_dir / "std_igra.npy", std_igra)
     shapes["igra"] = arr_igra.shape
 
     # ICOADS (station)
