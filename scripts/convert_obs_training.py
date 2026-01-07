@@ -223,6 +223,8 @@ def main():
     arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out_hirs / "2007_2021_hirs.mmap", arr)
     save_norms(norms_dir, "hirs", arr, reduce_axes=(0, 2, 3))
+    os.replace(norms_dir / "mean_hirs.npy", norms_dir / "hirs_means.npy")
+    os.replace(norms_dir / "std_hirs.npy", norms_dir / "hirs_stds.npy")
     shapes["hirs"] = arr.shape
 
     # GRIDSAT (assume dims: time, channel, x, y)
