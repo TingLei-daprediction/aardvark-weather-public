@@ -236,6 +236,10 @@ def main():
     arr_sat = xr.concat([ds_sat[n] for n in chans], dim="channel_temp").transpose("time", "channel_temp", "longitude", "latitude").values.astype("float32")
     write_memmap(out_sat / "gridsat_data.mmap", arr_sat)
     save_norms(norms_dir, "sat", arr_sat, reduce_axes=(0, 2, 3))
+    mean_sat = np.load(norms_dir / "mean_sat.npy").reshape(-1, 1, 1)
+    std_sat = np.load(norms_dir / "std_sat.npy").reshape(-1, 1, 1)
+    np.save(norms_dir / "mean_sat.npy", mean_sat)
+    np.save(norms_dir / "std_sat.npy", std_sat)
     shapes["gridsat"] = arr_sat.shape
 
     # IASI (concatenate two files)
