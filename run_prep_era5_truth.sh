@@ -24,14 +24,21 @@ source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-en
 
 set -euo pipefail
 
-INPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/single_level"
+INPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/pressure_level"
+SFC_INPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-weatherbench/era5_1p5deg/single_level"
 OUTPUT_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
 GRID_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/grid_lon_lat/"
-ERA5_MODE="4u"
+ERA5_MODE="4u_sfc"
 YEARS=(2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019)
 
-# Variables in the channel order you want to store
+# 4u_sfc: 4u pressure-level vars plus surface vars (order matters)
 VARS=(
+  geopotential
+  temperature
+  relative_humidity
+  u_component_of_wind
+  v_component_of_wind
+  specific_humidity
   2m_temperature
   2m_dewpoint_temperature
   10m_u_component_of_wind
@@ -42,6 +49,7 @@ VARS=(
 
 python scripts/prep_era5_truth.py \
   --input_dir "${INPUT_DIR}" \
+  --sfc_input_dir "${SFC_INPUT_DIR}" \
   --output_dir "${OUTPUT_DIR}" \
   --era5_mode "${ERA5_MODE}" \
   --variables "${VARS[@]}" \

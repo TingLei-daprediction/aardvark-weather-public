@@ -28,11 +28,16 @@ import xarray as xr
 def parse_args():
     p = argparse.ArgumentParser(description="Prepare ERA5 memmaps on target grid")
     p.add_argument("--input_dir", required=True, help="Dir with monthly ERA5 NetCDF files")
+    p.add_argument(
+        "--sfc_input_dir",
+        default=None,
+        help="Optional dir with surface NetCDF files (for mixed modes like 4u_sfc)",
+    )
     p.add_argument("--output_dir", required=True, help="Base output dir for memmaps/norms")
     p.add_argument(
         "--era5_mode",
-        default="4u",
-        help="Mode name for output files (e.g., sfc, 4u, 13u)",
+        default="4u_sfc",
+        help="Mode name for output files (e.g., sfc, 4u, 4u_sfc, 13u)",
     )
     p.add_argument(
         "--variables",
@@ -51,6 +56,11 @@ def parse_args():
         "--pattern",
         default="era5_*_{year}_*.nc",
         help="Glob pattern for files in input_dir; use {year} placeholder (default: era5_*_{year}_*.nc)",
+    )
+    p.add_argument(
+        "--sfc_pattern",
+        default="era5_*_{year}_*.nc",
+        help="Glob pattern for files in sfc_input_dir; use {year} placeholder (default: era5_*_{year}_*.nc)",
     )
     p.add_argument(
         "--grid_dir",
@@ -142,35 +152,47 @@ def main():
             continue
 
         ds = xr.open_mfdataset(files, combine="by_coords")
+        ds_sfc = None
+        if args.sfc_input_dir:
+            sfc_glob = args.sfc_pattern.format(year=year)
+            sfc_files = sorted(glob.glob(os.path.join(args.sfc_input_dir, sfc_glob)))
+            if sfc_files:
+                ds_sfc = xr.open_mfdataset(sfc_files, combine="by_coords")
         ds, time_name, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+        if ds_sfc is not None:
+            ds_sfc, sfc_time, sfc_lon, sfc_lat = normalize_and_reindex(
+                ds_sfc, lon_tgt, lat_tgt
+            )
+            time_name = sfc_time
         if args.time_freq == "1D":
             ds = select_daily_00utc(ds, time_name)
+            if ds_sfc is not None:
+                ds_sfc = select_daily_00utc(ds_sfc, time_name)
 
         # Stack variables in the given order, flattening levels (if present) into channels
         channel_arrays = []
         for v in args.variables:
             v_in = name_map.get(v, v)
-            if v_in not in ds.data_vars:
+            da = None
+            if v_in in ds.data_vars:
+                da = ds[v_in]
+            elif ds_sfc is not None and v_in in ds_sfc.data_vars:
+                da = ds_sfc[v_in]
+            else:
                 raise ValueError(
-                    f"Variable {v} (mapped to {v_in}) not found in dataset for year {year}"
+                    f"Variable {v} (mapped to {v_in}) not found for year {year}"
                 )
-            da = ds[v_in]
-            if args.era5_mode == "4u":
-                if "pressure_level" not in da.dims:
-                    raise ValueError(
-                        f"Expected pressure_level in dims for {v_in}, got {da.dims}"
-                    )
+
+            if "pressure_level" in da.dims:
                 da = da.transpose(time_name, "pressure_level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
                 arr_v = np.transpose(arr_v, (0, 1, 3, 2))
-                # reshape to (time, channels, lon, lat)
-                arr_v = arr_v.reshape(arr_v.shape[0], arr_v.shape[1], arr_v.shape[2], arr_v.shape[3])
             else:
                 da = da.transpose(time_name, lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, lat, lon)
                 arr_v = np.transpose(arr_v, (0, 2, 1))  # (time, lon, lat)
-                arr_v = arr_v[:, np.newaxis, ...]      # add channel dim
+                arr_v = arr_v[:, np.newaxis, ...]  # add channel dim
             channel_arrays.append(arr_v)
 
         # Concatenate all channels: resulting shape (time, channels, lon, lat)

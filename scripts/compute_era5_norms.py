@@ -20,7 +20,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="Compute mean/std from ERA5 memmaps")
     p.add_argument("--data_dir", required=True, help="Root containing era5/ memmaps")
     p.add_argument("--output_dir", required=True, help="Root for norm_factors outputs")
-    p.add_argument("--era5_mode", default="4u")
+    p.add_argument("--era5_mode", default="4u_sfc")
     p.add_argument("--res", type=int, default=1)
     p.add_argument("--years", nargs="+", type=int, required=True)
     p.add_argument("--grid_dir", required=True, help="Dir with era5_x_<res>.npy and era5_y_<res>.npy")

@@ -77,12 +77,14 @@ def main(rank, world_size, output_dir, args):
     era5_mode = args.era5_mode
     ddp_setup(rank, world_size, master_port)
 
+    out_channels = 30 if era5_mode == "4u_sfc" else 24
+
     # Setup loss function
     if args.loss == "lw_rmse":
         lf = WeightedRmseLoss(
             args.res,
             start_ind=0,
-            end_ind=24,
+            end_ind=out_channels,
             weight_per_variable=False,
         )
     elif args.loss == "lw_rmse_pressure_weighted":
@@ -99,6 +101,7 @@ def main(rank, world_size, output_dir, args):
         se_model_path=args.se_model_path,
         forecast_model_path=args.forecast_model_path,
         sf_model_path=args.sf_model_path,
+        era5_mode=era5_mode,
     )
     dist.barrier()
 
@@ -109,11 +112,11 @@ def main(rank, world_size, output_dir, args):
         start_date="2007-01-02",
         end_date="2017-12-31",
         lead_time=lead_time,
-        era5_mode="4u",
+        era5_mode=era5_mode,
         mode="train",
         res=args.res,
         var_start=0,
-        var_end=24,
+        var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
         region=args.region,
@@ -127,11 +130,11 @@ def main(rank, world_size, output_dir, args):
         start_date="2019-01-01",
         end_date="2019-12-21",
         lead_time=lead_time,
-        era5_mode="4u",
+        era5_mode=era5_mode,
         mode="train",
         res=args.res,
         var_start=0,
-        var_end=24,
+        var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
         region=args.region,
@@ -144,11 +147,11 @@ def main(rank, world_size, output_dir, args):
         start_date="2018-01-01",
         end_date="2018-12-21",
         lead_time=lead_time,
-        era5_mode="4u",
+        era5_mode=era5_mode,
         mode="train",
         res=args.res,
         var_start=0,
-        var_end=24,
+        var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
         region=args.region,
@@ -212,7 +215,7 @@ if __name__ == "__main__":
     parser.add_argument("--master_port", default="12345")
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--lead_time", type=int)
-    parser.add_argument("--era5_mode", default="4u")
+    parser.add_argument("--era5_mode", default="4u_sfc")
     parser.add_argument("--sf_model_path")
     parser.add_argument("--se_model_path")
     parser.add_argument("--forecast_model_path")

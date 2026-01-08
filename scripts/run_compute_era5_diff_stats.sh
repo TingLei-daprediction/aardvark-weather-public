@@ -9,7 +9,7 @@ DATA_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public
 AUX_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data"
 GRID_DIR="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/grid_lon_lat"
 YEARS=(2007 2008)
-ERA5_MODE="4u"
+ERA5_MODE="4u_sfc"
 RES=1
 
 python "${SCRIPT_DIR}/compute_era5_diff_stats.py" \

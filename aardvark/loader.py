@@ -542,6 +542,8 @@ class WeatherDataset(Dataset):
             levels = 4
         elif self.era5_mode == "13u":
             levels = 69
+        elif self.era5_mode == "4u_sfc":
+            levels = None
         else:
             levels = 24
 
@@ -552,11 +554,17 @@ class WeatherDataset(Dataset):
             x = 64
             y = 32
         freq_tag = "6" if self.time_freq == "6H" else "1d"
+        memmap_path = self.data_path + "/era5/era5_{}_{}_{}_{}.memmap".format(
+            self.era5_mode, self.res, freq_tag, year
+        )
+        if levels is None:
+            nbytes = os.path.getsize(memmap_path)
+            denom = d * x * y * 4
+            if nbytes % denom != 0:
+                raise ValueError(f"File size not divisible by expected frame size: {memmap_path}")
+            levels = nbytes // denom
         mmap = np.memmap(
-            self.data_path
-            + "/era5/era5_{}_{}_{}_{}.memmap".format(
-                self.era5_mode, self.res, freq_tag, year
-            ),
+            memmap_path,
             dtype="float32",
             mode="r",
             shape=(d, levels, x, y),
@@ -1187,6 +1195,8 @@ class WeatherDatasetDownscaling(Dataset):
             levels = 4
         elif self.era5_mode == "13u":
             levels = 69
+        elif self.era5_mode == "4u_sfc":
+            levels = None
         else:
             levels = 24
 
@@ -1197,11 +1207,17 @@ class WeatherDatasetDownscaling(Dataset):
             x = 64
             y = 32
         freq_tag = "6" if self.time_freq == "6H" else "1d"
+        memmap_path = self.data_path + "era5/era5_{}_{}_{}_{}.memmap".format(
+            self.era5_mode, self.res, freq_tag, year
+        )
+        if levels is None:
+            nbytes = os.path.getsize(memmap_path)
+            denom = d * x * y * 4
+            if nbytes % denom != 0:
+                raise ValueError(f"File size not divisible by expected frame size: {memmap_path}")
+            levels = nbytes // denom
         mmap = np.memmap(
-            self.data_path
-            + "era5/era5_{}_{}_{}_{}.memmap".format(
-                self.era5_mode, self.res, freq_tag, year
-            ),
+            memmap_path,
             dtype="float32",
             mode="r",
             shape=(d, levels, x, y),

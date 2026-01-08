@@ -387,7 +387,7 @@ if __name__ == "__main__":
     parser.add_argument("--world_size", type=int, default=None, help="Override world size")
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--lead_time", type=int)
-    parser.add_argument("--era5_mode", default="4u")
+    parser.add_argument("--era5_mode", default="4u_sfc")
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument("--res", type=int, default=1)
     parser.add_argument("--frequency", type=int, default=6)

@@ -24,6 +24,7 @@ class ConvCNPWeatherE2E(nn.Module):
         sf_model_path,
         return_gridded=False,
         aux_data_path=None,
+        era5_mode="4u_sfc",
     ):
 
         super().__init__()
@@ -31,6 +32,7 @@ class ConvCNPWeatherE2E(nn.Module):
         self.device = device
         self.lead_time = lead_time
         self.return_gridded = return_gridded
+        self.era5_mode = era5_mode
 
         # Load encoder
         self.se_model = self.load_se_model(se_model_path)
@@ -49,26 +51,38 @@ class ConvCNPWeatherE2E(nn.Module):
 
         # Setup normalisation factors
         self.forecast_input_means = (
-            self.to_tensor(np.load(aux_data_path + "norm_factors/mean_4u_1.npy"))
+            self.to_tensor(
+                np.load(aux_data_path + f"norm_factors/mean_{self.era5_mode}_1.npy")
+            )
             .unsqueeze(0)
             .unsqueeze(0)
             .unsqueeze(0)
         )
         self.forecast_input_stds = (
-            self.to_tensor(np.load(aux_data_path + "norm_factors/std_4u_1.npy"))
+            self.to_tensor(
+                np.load(aux_data_path + f"norm_factors/std_{self.era5_mode}_1.npy")
+            )
             .unsqueeze(0)
             .unsqueeze(0)
             .unsqueeze(0)
         )
 
         self.forecast_pred_diff_means = (
-            self.to_tensor(np.load(aux_data_path + "norm_factors/mean_diff_4u_1.npy"))
+            self.to_tensor(
+                np.load(
+                    aux_data_path + f"norm_factors/mean_diff_{self.era5_mode}_1.npy"
+                )
+            )
             .unsqueeze(0)
             .unsqueeze(0)
             .unsqueeze(0)
         )
         self.forecast_pred_diff_stds = (
-            self.to_tensor(np.load(aux_data_path + "norm_factors/std_diff_4u_1.npy"))
+            self.to_tensor(
+                np.load(
+                    aux_data_path + f"norm_factors/std_diff_{self.era5_mode}_1.npy"
+                )
+            )
             .unsqueeze(0)
             .unsqueeze(0)
             .unsqueeze(0)

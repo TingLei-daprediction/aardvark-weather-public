@@ -14,7 +14,7 @@ import numpy as np
 def parse_args():
     p = argparse.ArgumentParser(description="Build climatology_data.mmap from ERA5 memmaps")
     p.add_argument("--data_dir", required=True, help="Base data_path containing era5 memmaps")
-    p.add_argument("--era5_mode", default="4u", help="ERA5 mode in file names (default: 4u)")
+    p.add_argument("--era5_mode", default="4u_sfc", help="ERA5 mode in file names (default: 4u_sfc)")
     p.add_argument("--res", type=int, default=1, help="Resolution suffix (default: 1)")
     p.add_argument("--years", nargs="+", type=int, required=True, help="Years to include")
     p.add_argument("--output_name", default="climatology_data.mmap", help="Output file name")

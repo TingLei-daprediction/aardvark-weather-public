@@ -76,7 +76,7 @@ if __name__ == "__main__":
             "{}/ic_{}.mmap".format(args.encoder_model_path, label),
             dtype="float32",
             mode="w+",
-            shape=(len(n_times), 121, 240, 24),
+            shape=(len(n_times), 121, 240, forecast_config["out_channels"]),
         )
 
         var_group_preds = []
@@ -89,10 +89,10 @@ if __name__ == "__main__":
             start_date=date[0],
             end_date=date[1],
             lead_time=0,
-            era5_mode="4u",
+            era5_mode=forecast_config["era5_mode"],
             res=1,
             var_start=0,
-            var_end=24,
+            var_end=forecast_config["out_channels"],
             diff=False,
         )
 
