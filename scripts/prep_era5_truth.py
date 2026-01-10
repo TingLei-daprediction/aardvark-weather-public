@@ -134,9 +134,11 @@ def main():
         "surface_pressure": "sp",
         "geopotential": "z",
         "temperature": "t",
+        "relative_humidity": "r",
         "specific_humidity": "q",
         "u_component_of_wind": "u",
         "v_component_of_wind": "v",
+        "vertical_velocity": "w",
     }
 
     # Accumulate for mean/std across all years
