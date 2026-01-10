@@ -29,3 +29,11 @@ Notes
 - Density channel: convDeepSet adds a per-input-channel density mask (1 where valid, 0 where NaN).
   This doubles channels for convDeepSet-based encoders (AMSU-A/B, HIRS, SAT, ICOADS, HadISD, IGRA);
   ASCAT/IASI are gridded interpolations and do not get density doubling.
+
+4u_sfc workflow (30 channels = 24 upper-air + 6 surface)
+- Generate truth memmaps (pressure-level + surface): `sbatch run_prep_era5_truth.sh`
+- Compute norms from memmaps:
+  `python scripts/compute_era5_norms.py --data_dir <data_root> --output_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019 --grid_dir <repo>/data/grid_lon_lat --time_freq 1D`
+- (Optional) Build climatology for 4u_sfc:
+  `python scripts/build_climatology.py --data_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019`
+- Train with `--era5_mode 4u_sfc --out_channels 30`
