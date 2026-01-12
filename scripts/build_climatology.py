@@ -18,6 +18,7 @@ def parse_args():
     p.add_argument("--res", type=int, default=1, help="Resolution suffix (default: 1)")
     p.add_argument("--years", nargs="+", type=int, required=True, help="Years to include")
     p.add_argument("--output_name", default="climatology_data.mmap", help="Output file name")
+    p.add_argument("--time_freq", default="1D", help="6H or 1D (daily 00 UTC)")
     return p.parse_args()
 
 
@@ -28,15 +29,17 @@ def is_leap(year):
 def main():
     args = parse_args()
     era5_dir = Path(args.data_dir) / "era5"
+    freq_tag = "6" if args.time_freq == "6H" else "1d"
+    step_factor = 4 if args.time_freq == "6H" else 1
 
     # Load one file to get channel/shape
     sample_year = args.years[0]
-    sample_path = era5_dir / f"era5_{args.era5_mode}_{args.res}_6_{sample_year}.memmap"
+    sample_path = era5_dir / f"era5_{args.era5_mode}_{args.res}_{freq_tag}_{sample_year}.memmap"
     if not sample_path.exists():
         raise FileNotFoundError(sample_path)
 
     # infer shape
-    d = (366 if is_leap(sample_year) else 365) * 4
+    d = (366 if is_leap(sample_year) else 365) * step_factor
     # channels, x, y are inferred from file size by loading with known dims
     # We use the standard 1-degree grid size from the code
     x = 240
@@ -59,15 +62,15 @@ def main():
 
     for year in args.years:
         days = 366 if is_leap(year) else 365
-        d = days * 4
-        path = era5_dir / f"era5_{args.era5_mode}_{args.res}_6_{year}.memmap"
+        d = days * step_factor
+        path = era5_dir / f"era5_{args.era5_mode}_{args.res}_{freq_tag}_{year}.memmap"
         if not path.exists():
             print(f"[WARN] Missing {path}, skipping.")
             continue
         data = np.memmap(path, dtype="float32", mode="r", shape=(d, channels, x, y))
         for day in range(days):
-            for slot in range(4):
-                idx = day * 4 + slot
+            for slot in range(step_factor):
+                idx = day * step_factor + slot
                 sum_days[slot, day, ...] += data[idx, ...]
                 count_days[slot, day] += 1
 
