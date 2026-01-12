@@ -37,6 +37,7 @@ python ${scriptdir}/prep_era5_truth.py \
   --output_dir "${OUTPUT_DIR}" \
   --era5_mode "${ERA5_MODE}" \
   --variables "${VARS[@]}" \
+  --pressure_levels 850 700 500 200 \
   --years "${YEARS[@]}" \
   --grid_dir "${GRID_DIR}" \
   --time_freq "${TIME_FREQ}"

@@ -12,6 +12,7 @@ Outputs (per year):
 
 Notes:
   - This script assumes 6-hourly data and uses the variables listed via --variables in the given order.
+  - Pressure-level variables can be restricted via --pressure_levels (default: 850,700,500,200).
   - Reindexes each monthly file to the target grid (nearest) after normalizing lon to 0–360 and flipping lat to 90→-90.
   - Channels are stacked as given in --variables; ensure this matches what your training expects.
 """
@@ -44,6 +45,13 @@ def parse_args():
         nargs="+",
         required=True,
         help="Variable names in desired channel order (must match NetCDF names)",
+    )
+    p.add_argument(
+        "--pressure_levels",
+        nargs="+",
+        type=int,
+        default=[850, 700, 500, 200],
+        help="Pressure levels to keep for pressure-level variables (default: 850 700 500 200)",
     )
     p.add_argument(
         "--years",
@@ -186,6 +194,13 @@ def main():
                 )
 
             if "pressure_level" in da.dims:
+                levels = [int(x) for x in da["pressure_level"].values]
+                missing = [l for l in args.pressure_levels if l not in levels]
+                if missing:
+                    raise ValueError(
+                        f"Missing pressure levels {missing} for {v_in} in year {year}"
+                    )
+                da = da.sel(pressure_level=args.pressure_levels)
                 da = da.transpose(time_name, "pressure_level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
