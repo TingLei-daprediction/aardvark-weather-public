@@ -345,7 +345,15 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_hirs(task, "current"),
                     elev,
                     task["climatology_current"],
-                    torch.ones_like(elev[:, :5, ...])
+                    torch.ones(
+                        (
+                            elev.shape[0],
+                            task["aux_time_current"].shape[1],
+                            elev.shape[2],
+                            elev.shape[3],
+                        ),
+                        device=elev.device,
+                    )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
             else:
@@ -371,7 +379,15 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_hirs(task, "prev"),
                     elev,
                     task["climatology_current"],
-                    torch.ones_like(elev[:, :5, ...])
+                    torch.ones(
+                        (
+                            elev.shape[0],
+                            task["aux_time_current"].shape[1],
+                            elev.shape[2],
+                            elev.shape[3],
+                        ),
+                        device=elev.device,
+                    )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
             x = torch.cat(encodings, dim=1)

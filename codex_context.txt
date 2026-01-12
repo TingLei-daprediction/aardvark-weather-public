@@ -37,3 +37,6 @@ Notes
 - (Optional) Build climatology for 4u_sfc:
   `python scripts/build_climatology.py --data_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019`
 - Train with `--era5_mode 4u_sfc --out_channels 30`
+- Bug note: `models.py` used `torch.ones_like(elev[:, :5, ...])` to size aux_time grids.
+  `elev` has 4 channels (orog, lsm, sin(lat), cos(lat)), so this mismatched aux_time (5 features).
+  Fix: size the aux_time grid using `aux_time_current.shape[1]` instead of `elev` channels.
