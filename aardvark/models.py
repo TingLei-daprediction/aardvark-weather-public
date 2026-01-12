@@ -317,10 +317,6 @@ class ConvCNPWeather(nn.Module):
         if self.mode == "assimilation":
 
             self.int_grid = [i.to(task["y_target"].device) for i in self.int_grid]
-            elev = nn.functional.interpolate(
-                torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2]),
-                size=(self.int_grid[0].shape[1], self.int_grid[1].shape[1]),
-            )
             elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])
 
             def igra_encoding(prefix):
