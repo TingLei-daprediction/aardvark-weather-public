@@ -356,6 +356,10 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+                if not getattr(self, "_debug_encoding_shapes", False):
+                    for i, enc in enumerate(encodings):
+                        print(f"[DEBUG] encodings[{i}] shape: {tuple(enc.shape)}")
+                    self._debug_encoding_shapes = True
             else:
                 # Option to pass two timesteps (t=-1 and t=0) as input
                 encodings = [
