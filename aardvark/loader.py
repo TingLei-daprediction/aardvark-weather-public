@@ -677,6 +677,20 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         era5 = self.era5_sfc[year - int(self.start_date[:4])][doy, ...]
         era5 = np.copy(era5)
+        if not getattr(self, "_debug_era5_shapes", False):
+            print(
+                "[DEBUG] era5_mode",
+                self.era5_mode,
+                "time_freq",
+                self.time_freq,
+                "era5_frame_shape",
+                era5.shape,
+                "means_shape",
+                getattr(self, "means", None).shape,
+                "stds_shape",
+                getattr(self, "stds", None).shape,
+            )
+            self._debug_era5_shapes = True
         if self.diff:
             era5 = era5 - self.era5_mean_spatial
         era5 = self.norm_era5(era5[np.newaxis, ...])[0, ...]
