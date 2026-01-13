@@ -273,8 +273,8 @@ class DDPTrainer:
 
             self.model.train()
             train_loss = []
-                with tqdm(self.train_loader, unit="batch") as tepoch:
-                    for count, task in enumerate(tepoch):
+            with tqdm(self.train_loader, unit="batch") as tepoch:
+                for count, task in enumerate(tepoch):
 
                         out = self.model(task, film_index=0)
 
