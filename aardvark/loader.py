@@ -765,6 +765,12 @@ class WeatherDatasetAssimilation(WeatherDataset):
             )
         return torch.from_numpy(x).float().to(dev)
 
+    def unnorm_base_context(self, x):
+        dev = x.device
+        x = x.detach().cpu().numpy()
+        x = x * self.stds[np.newaxis, ...] + self.means[np.newaxis, ...]
+        return torch.from_numpy(x).float().to(dev)
+
     def get_index(self, index, prefix):
         """
         Load data for the relevant index respecting different offsets depending on the modality

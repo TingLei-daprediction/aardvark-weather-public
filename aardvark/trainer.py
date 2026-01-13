@@ -131,16 +131,20 @@ class DDPTrainer:
                 lf.append(l)
 
                 try:
-                    ic = self.train_loader.dataset.unnorm_base_context(
-                        task["y_context"][:, :-11, ...]
-                    ).permute(0, 3, 2, 1)
+                    if hasattr(self.train_loader.dataset, "unnorm_base_context"):
+                        ic = self.train_loader.dataset.unnorm_base_context(
+                            task["y_context"][:, :-11, ...]
+                        ).permute(0, 3, 2, 1)
+                    else:
+                        ic = None
                     unnorm_pred = self.train_loader.dataset.unnorm_pred(out)
                     unnorm_target = self.train_loader.dataset.unnorm_pred(
                         task["y_target"]
                     )
 
-                    unnorm_pred = unnorm_pred + ic
-                    unnorm_target = unnorm_target + ic
+                    if ic is not None:
+                        unnorm_pred = unnorm_pred + ic
+                        unnorm_target = unnorm_target + ic
 
                     lu = (
                         self.loss_function(
@@ -233,7 +237,10 @@ class DDPTrainer:
                 .cpu()
                 .numpy(),
             )
-        log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
+        if lf_unnorm:
+            log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
+        else:
+            log_loss_unnorm = np.nan
 
         if np.logical_and(self.rank == 0, self.epoch % 5 == 0):
 
