@@ -329,6 +329,12 @@ def main(rank, world_size, output_dir, args):
     train_sampler = DistributedSampler(train_dataset)
     val_sampler = DistributedSampler(val_dataset)
 
+    print(
+        f"[INFO] train_dataset len={len(train_dataset)} "
+        f"val_dataset len={len(val_dataset)}",
+        flush=True,
+    )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
