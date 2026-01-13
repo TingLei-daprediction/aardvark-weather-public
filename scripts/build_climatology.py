@@ -19,6 +19,12 @@ def parse_args():
     p.add_argument("--years", nargs="+", type=int, required=True, help="Years to include")
     p.add_argument("--output_name", default="climatology_data.mmap", help="Output file name")
     p.add_argument("--time_freq", default="1D", help="6H or 1D (daily 00 UTC)")
+    p.add_argument(
+        "--fill_nan",
+        type=float,
+        default=None,
+        help="If set, replace NaN/Inf with this value before averaging.",
+    )
     return p.parse_args()
 
 
@@ -71,7 +77,15 @@ def main():
         for day in range(days):
             for slot in range(step_factor):
                 idx = day * step_factor + slot
-                sum_days[slot, day, ...] += data[idx, ...]
+                frame = data[idx, ...]
+                if args.fill_nan is not None:
+                    frame = np.nan_to_num(
+                        frame,
+                        nan=args.fill_nan,
+                        posinf=args.fill_nan,
+                        neginf=args.fill_nan,
+                    )
+                sum_days[slot, day, ...] += frame
                 count_days[slot, day] += 1
 
     for slot in range(4):
