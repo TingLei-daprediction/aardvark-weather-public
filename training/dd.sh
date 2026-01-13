@@ -9,6 +9,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=0
+#SBATCH --open-mode=truncate
 #SBATCH -t 0:30:00
 #SBATCH -o dd.out
 #SBATCH -e dd.err
