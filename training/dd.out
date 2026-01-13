@@ -1,0 +1,64 @@
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+Warning: weights path not found, skipping load: for-checking-point
+[DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
+[DEBUG] encodings[0] shape: (6, 45, 240, 121)
+[DEBUG] encodings[1] shape: (6, 15, 240, 121)
+[DEBUG] encodings[2] shape: (6, 8, 240, 121)
+[DEBUG] encodings[3] shape: (6, 10, 240, 121)
+[DEBUG] encodings[4] shape: (6, 4, 240, 121)
+[DEBUG] encodings[5] shape: (6, 22, 240, 121)
+[DEBUG] encodings[6] shape: (6, 10, 240, 121)
+[DEBUG] encodings[7] shape: (6, 48, 240, 121)
+[DEBUG] encodings[8] shape: (6, 40, 240, 121)
+[DEBUG] encodings[9] shape: (6, 4, 240, 121)
+[DEBUG] encodings[10] shape: (6, 24, 240, 121)
+[DEBUG] encodings[11] shape: (6, 5, 240, 121)
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+Warning: weights path not found, skipping load: for-checking-point
+[DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
+[DEBUG] encodings[0] shape: (6, 45, 240, 121)
+[DEBUG] encodings[1] shape: (6, 15, 240, 121)
+[DEBUG] encodings[2] shape: (6, 8, 240, 121)
+[DEBUG] encodings[3] shape: (6, 10, 240, 121)
+[DEBUG] encodings[4] shape: (6, 4, 240, 121)
+[DEBUG] encodings[5] shape: (6, 22, 240, 121)
+[DEBUG] encodings[6] shape: (6, 10, 240, 121)
+[DEBUG] encodings[7] shape: (6, 48, 240, 121)
+[DEBUG] encodings[8] shape: (6, 40, 240, 121)
+[DEBUG] encodings[9] shape: (6, 4, 240, 121)
+[DEBUG] encodings[10] shape: (6, 24, 240, 121)
+[DEBUG] encodings[11] shape: (6, 5, 240, 121)
