@@ -8,7 +8,7 @@ cp: cannot stat 'reproduce_training.sh': No such file or directory
   return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:596: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
   return torch.from_numpy(arr).float().to(self.device)
-W0113 01:13:14.608015 22765907530432 torch/multiprocessing/spawn.py:145] Terminating process 1391646 via signal SIGTERM
+W0113 01:40:47.005096 22558945174208 torch/multiprocessing/spawn.py:145] Terminating process 1393510 via signal SIGTERM
 Traceback (most recent call last):
   File "../aardvark/train_module.py", line 433, in <module>
     mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
@@ -28,43 +28,10 @@ Traceback (most recent call last):
     trainer.train(n_epochs=args.epoch)
   File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 229, in train
     epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, 0)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 112, in eval_epoch
-    out = self.model(task, film_index=0)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/parallel/distributed.py", line 1593, in forward
-    else self._run_ddp_forward(*inputs, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/parallel/distributed.py", line 1411, in _run_ddp_forward
-    return self.module(*inputs, **kwargs)  # type: ignore[index]
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/models.py", line 428, in forward
-    x = self.decoder_lr(x, film_index=(task["lt"] * 0) + 1)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/vit.py", line 294, in forward
-    out_transformers = self.forward_encoder(x, lead_times[:, 0], self.default_vars)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/vit.py", line 272, in forward_encoder
-    x = self.token_embeds[0](x)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/timm/models/layers/patch_embed.py", line 44, in forward
-    x = self.proj(x)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1532, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1541, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 460, in forward
-    return self._conv_forward(input, self.weight, self.bias)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/nn/modules/conv.py", line 456, in _conv_forward
-    return F.conv2d(input, weight, bias, self.stride,
-RuntimeError: Given groups=1, weight of size [512, 235, 3, 3], expected input[6, 256, 256, 128] to have 235 channels, but got 256 channels instead
+  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 206, in eval_epoch
+    log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
+  File "<__array_function__ internals>", line 200, in stack
+  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/shape_base.py", line 460, in stack
+    raise ValueError('need at least one array to stack')
+ValueError: need at least one array to stack
 
