@@ -27,6 +27,27 @@ class RmseLoss(nn.Module):
         squared_diff = ((target.to(output.device) - output) ** 2)[
             ..., self.start_ind : self.end_ind
         ]
+        if not hasattr(self, "_warned_nan_rmse"):
+            valid_counts = (~torch.isnan(squared_diff)).sum(dim=(1, 2, 3))
+            if torch.any(valid_counts == 0):
+                batch_idx = torch.where(valid_counts == 0)[0].tolist()
+                tgt = target[..., self.start_ind : self.end_ind]
+                out = output[..., self.start_ind : self.end_ind]
+                print(
+                    "[WARN] RmseLoss: all-NaN squared_diff for batches "
+                    f"{batch_idx}. target shape={tuple(target.shape)} "
+                    f"output shape={tuple(output.shape)} "
+                    f"target_nan={torch.isnan(tgt).sum().item()} "
+                    f"output_nan={torch.isnan(out).sum().item()} "
+                    f"target_inf={torch.isinf(tgt).sum().item()} "
+                    f"output_inf={torch.isinf(out).sum().item()} "
+                    f"target_min={torch.nanmin(tgt).item()} "
+                    f"target_max={torch.nanmax(tgt).item()} "
+                    f"output_min={torch.nanmin(out).item()} "
+                    f"output_max={torch.nanmax(out).item()}",
+                    flush=True,
+                )
+                self._warned_nan_rmse = True
         return torch.mean(torch.sqrt(torch.nanmean(squared_diff, dim=(1, 2, 3))))
 
 
