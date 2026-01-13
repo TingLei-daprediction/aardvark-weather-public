@@ -1,5 +1,5 @@
-cp: cp: cannot stat 'reproduce_training.sh'cannot stat 'reproduce_training.sh': No such file or directory: No such file or directory
-
+cp: cannot stat 'reproduce_training.sh': No such file or directory
+cp: cannot stat 'reproduce_training.sh': No such file or directory
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/aten/src/ATen/native/TensorShape.cpp:3587.)
   return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:596: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
@@ -8,7 +8,7 @@ cp: cp: cannot stat 'reproduce_training.sh'cannot stat 'reproduce_training.sh': 
   return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:596: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
   return torch.from_numpy(arr).float().to(self.device)
-W0113 02:23:44.640191 22790200541888 torch/multiprocessing/spawn.py:145] Terminating process 2230275 via signal SIGTERM
+W0113 02:39:14.888746 23197264294592 torch/multiprocessing/spawn.py:145] Terminating process 1403017 via signal SIGTERM
 Traceback (most recent call last):
   File "../aardvark/train_module.py", line 439, in <module>
     mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
@@ -26,9 +26,9 @@ Traceback (most recent call last):
     fn(i, *args)
   File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/train_module.py", line 370, in main
     trainer.train(n_epochs=args.epoch)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 229, in train
+  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 259, in train
     epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, 0)
-  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 206, in eval_epoch
+  File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/trainer.py", line 236, in eval_epoch
     log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
   File "<__array_function__ internals>", line 200, in stack
   File "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/shape_base.py", line 460, in stack

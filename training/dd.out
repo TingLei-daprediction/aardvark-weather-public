@@ -50,6 +50,7 @@ Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] encodings[9] shape: (6, 4, 240, 121)
 [DEBUG] encodings[10] shape: (6, 24, 240, 121)
 [DEBUG] encodings[11] shape: (6, 5, 240, 121)
+[WARN] unnorm_pred failed in eval_epoch: 'WeatherDatasetAssimilation' object has no attribute 'unnorm_base_context' debug={'era5_mode': '4u_sfc', 'y_target': (6, 121, 240, 30), 'y_context': None, 'out': (6, 121, 240, 30), 'ic': None, 'means': (30, 1, 1), 'stds': (30, 1, 1)}
 Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
 [DEBUG] encodings[0] shape: (6, 45, 240, 121)
@@ -64,3 +65,4 @@ Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] encodings[9] shape: (6, 4, 240, 121)
 [DEBUG] encodings[10] shape: (6, 24, 240, 121)
 [DEBUG] encodings[11] shape: (6, 5, 240, 121)
+[WARN] unnorm_pred failed in eval_epoch: 'WeatherDatasetAssimilation' object has no attribute 'unnorm_base_context' debug={'era5_mode': '4u_sfc', 'y_target': (6, 121, 240, 30), 'y_context': None, 'out': (6, 121, 240, 30), 'ic': None, 'means': (30, 1, 1), 'stds': (30, 1, 1)}
