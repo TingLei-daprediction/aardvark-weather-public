@@ -128,8 +128,14 @@ class ViT(nn.Module):
                 ]
             )
         else:
+            mlp_out_channels = 256
+            # cltorg bug? original code used PatchEmbed(..., in_channels), which
+            # mismatched the MLP output (256) when per_var_embedding=False.
+            # self.token_embeds = nn.ModuleList(
+            #     [PatchEmbed(img_size, patch_size, in_channels, embed_dim)]
+            # )
             self.token_embeds = nn.ModuleList(
-                [PatchEmbed(img_size, patch_size, in_channels, embed_dim)]
+                [PatchEmbed(img_size, patch_size, mlp_out_channels, embed_dim)]
             )
         self.num_patches = self.token_embeds[0].num_patches
 
@@ -170,7 +176,10 @@ class ViT(nn.Module):
 
         self.initialize_weights()
         if not self.per_var_embedding:
-            self.mlp = MLP(in_channels=in_channels, out_channels=256)
+            # cltorg bug? original code hard-wired out_channels=256 but did not
+            # match PatchEmbed in_channels, causing a 256 vs in_channels mismatch.
+            # self.mlp = MLP(in_channels=in_channels, out_channels=256)
+            self.mlp = MLP(in_channels=in_channels, out_channels=mlp_out_channels)
 
     def initialize_weights(self):
         pos_embed = get_2d_sincos_pos_embed(

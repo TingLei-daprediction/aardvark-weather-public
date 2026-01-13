@@ -40,3 +40,8 @@ Notes
 - Bug note: `models.py` used `torch.ones_like(elev[:, :5, ...])` to size aux_time grids.
   `elev` has 4 channels (orog, lsm, sin(lat), cos(lat)), so this mismatched aux_time (5 features).
   Fix: size the aux_time grid using `aux_time_current.shape[1]` instead of `elev` channels.
+- cltorg bug? note: `aardvark/models.py` had `elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])`;
+  temporarily commented to test encoder shape alignment.
+- cltorg bug? note: `aardvark/vit.py` per_var_embedding=False path was inconsistent:
+  MLP outputs 256 channels but PatchEmbed expected `in_channels` (e.g., 277).
+  Fixed by setting PatchEmbed in_channels to 256 and leaving commented original lines.
