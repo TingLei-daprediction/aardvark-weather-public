@@ -67,6 +67,8 @@ Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] encodings[11] shape: (6, 5, 240, 121)
 [WARN] unnorm_pred failed in eval_epoch: 'y_context' debug={'era5_mode': '4u_sfc', 'y_target': (6, 121, 240, 30), 'y_context': None, 'out': (6, 121, 240, 30), 'ic': None, 'means': (30, 1, 1), 'stds': (30, 1, 1)}
 [DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
-[WARN] RmseLoss: all-NaN squared_diff for batches [0, 1, 2, 3, 4, 5]. target shape=(6, 121, 240, 30) output shape=(6, 121, 240, 30) target_nan=2787840 output_nan=4181760 target_inf=0 output_inf=0 target_min=-6.630374908447266 target_max=7.208291530609131 output_min=inf output_max=-inf
+[WARN] NaN/Inf detected in train batch 0: out_nan=False out_inf=False tgt_nan=True tgt_inf=False out_min=-0.00623372383415699 out_max=0.006228368729352951 tgt_min=-7.081868648529053 tgt_max=7.127284526824951 out_shape=(6, 121, 240, 30) tgt_shape=(6, 121, 240, 30)
 [DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
+[WARN] NaN/Inf detected in train batch 0: out_nan=False out_inf=False tgt_nan=True tgt_inf=False out_min=-0.006219110451638699 out_max=0.006280011963099241 tgt_min=-6.252739906311035 tgt_max=5.418333053588867 out_shape=(6, 121, 240, 30) tgt_shape=(6, 121, 240, 30)
 [WARN] RmseLoss: all-NaN squared_diff for batches [0, 1, 2, 3, 4, 5]. target shape=(6, 121, 240, 30) output shape=(6, 121, 240, 30) target_nan=2787840 output_nan=4181760 target_inf=0 output_inf=0 target_min=-7.642879009246826 target_max=7.609808444976807 output_min=inf output_max=-inf
+[WARN] RmseLoss: all-NaN squared_diff for batches [0, 1, 2, 3, 4, 5]. target shape=(6, 121, 240, 30) output shape=(6, 121, 240, 30) target_nan=2787840 output_nan=4181760 target_inf=0 output_inf=0 target_min=-6.630374908447266 target_max=7.208291530609131 output_min=inf output_max=-inf
