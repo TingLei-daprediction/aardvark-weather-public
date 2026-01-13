@@ -157,7 +157,37 @@ class DDPTrainer:
 
                     lf_unnorm.append(lu)
 
-                except:
+                except Exception as exc:
+                    if not getattr(self, "_warned_unnorm", False):
+                        debug_info = {
+                            "era5_mode": getattr(
+                                self.train_loader.dataset, "era5_mode", None
+                            ),
+                            "y_target": tuple(task["y_target"].shape)
+                            if "y_target" in task
+                            else None,
+                            "y_context": tuple(task["y_context"].shape)
+                            if "y_context" in task
+                            else None,
+                            "out": tuple(out.shape) if "out" in locals() else None,
+                            "ic": tuple(ic.shape) if "ic" in locals() else None,
+                            "means": getattr(
+                                getattr(self.train_loader.dataset, "means", None),
+                                "shape",
+                                None,
+                            ),
+                            "stds": getattr(
+                                getattr(self.train_loader.dataset, "stds", None),
+                                "shape",
+                                None,
+                            ),
+                        }
+                        print(
+                            f"[WARN] unnorm_pred failed in eval_epoch: {exc} "
+                            f"debug={debug_info}",
+                            flush=True,
+                        )
+                        self._warned_unnorm = True
                     pass
 
             if self.test_loader is not None:
