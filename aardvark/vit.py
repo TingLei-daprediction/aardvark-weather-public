@@ -170,7 +170,7 @@ class ViT(nn.Module):
 
         self.initialize_weights()
         if not self.per_var_embedding:
-            self.mlp = MLP(in_channels=277, out_channels=256)
+            self.mlp = MLP(in_channels=in_channels, out_channels=256)
 
     def initialize_weights(self):
         pos_embed = get_2d_sincos_pos_embed(
