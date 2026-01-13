@@ -18,7 +18,9 @@ import numpy as np
 
 # CONFIG: update these paths for your environment.
 DATA_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/era5"
-NORM_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/norm_factors"
+DATA_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data/era5"
+#NORM_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/norm_factors"
+NORM_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-data/tlei-aardvark-data/norm_factors"
 ERA5_MODE = "4u_sfc"
 RES = 1
 TIME_TAG = "1d"  # "1d" for daily, "6" for 6-hourly filenames
