@@ -18,10 +18,12 @@ python ${ROOT_DIR}/scripts/build_elev_vars.py \
   --lsm_var land_sea_mask
 
 # 2) Build climatology_data.mmap from ERA5 4u memmaps
-python ${ROOT_DIR}/scripts/build_climatology.py \
-  --data_dir "${DATA_DIR}" \
+python scripts/build_climatology.py \
+  --data_dir /scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data \
   --era5_mode 4u_sfc \
   --res 1 \
-  --years 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019
+  --years 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019 \
+  --time_freq 1D \
+  --fill_nan 0.0
 
 echo "Done. Static fields and climatology written under ${DATA_DIR}/era5."
