@@ -275,45 +275,44 @@ class DDPTrainer:
             train_loss = []
             with tqdm(self.train_loader, unit="batch") as tepoch:
                 for count, task in enumerate(tepoch):
+                    out = self.model(task, film_index=0)
 
-                        out = self.model(task, film_index=0)
+                    if not getattr(self, "_warned_nan_train", False):
+                        tgt = task["y_target"]
+                        out_nan = torch.isnan(out).any().item()
+                        tgt_nan = torch.isnan(tgt).any().item()
+                        out_inf = torch.isinf(out).any().item()
+                        tgt_inf = torch.isinf(tgt).any().item()
+                        if out_nan or tgt_nan or out_inf or tgt_inf:
+                            def _safe_min_max(tensor):
+                                if hasattr(torch, "nanmin"):
+                                    return (
+                                        torch.nanmin(tensor).item(),
+                                        torch.nanmax(tensor).item(),
+                                    )
+                                inf = torch.tensor(float("inf"), device=tensor.device)
+                                neg_inf = torch.tensor(float("-inf"), device=tensor.device)
+                                t_min = torch.min(torch.where(torch.isnan(tensor), inf, tensor))
+                                t_max = torch.max(torch.where(torch.isnan(tensor), neg_inf, tensor))
+                                return t_min.item(), t_max.item()
 
-                        if not getattr(self, "_warned_nan_train", False):
-                            tgt = task["y_target"]
-                            out_nan = torch.isnan(out).any().item()
-                            tgt_nan = torch.isnan(tgt).any().item()
-                            out_inf = torch.isinf(out).any().item()
-                            tgt_inf = torch.isinf(tgt).any().item()
-                            if out_nan or tgt_nan or out_inf or tgt_inf:
-                                def _safe_min_max(tensor):
-                                    if hasattr(torch, "nanmin"):
-                                        return (
-                                            torch.nanmin(tensor).item(),
-                                            torch.nanmax(tensor).item(),
-                                        )
-                                    inf = torch.tensor(float("inf"), device=tensor.device)
-                                    neg_inf = torch.tensor(float("-inf"), device=tensor.device)
-                                    t_min = torch.min(torch.where(torch.isnan(tensor), inf, tensor))
-                                    t_max = torch.max(torch.where(torch.isnan(tensor), neg_inf, tensor))
-                                    return t_min.item(), t_max.item()
+                            out_min, out_max = _safe_min_max(out)
+                            tgt_min, tgt_max = _safe_min_max(tgt)
+                            print(
+                                "[WARN] NaN/Inf detected in train batch "
+                                f"{count}: out_nan={out_nan} out_inf={out_inf} "
+                                f"tgt_nan={tgt_nan} tgt_inf={tgt_inf} "
+                                f"out_min={out_min} out_max={out_max} "
+                                f"tgt_min={tgt_min} tgt_max={tgt_max} "
+                                f"out_shape={tuple(out.shape)} "
+                                f"tgt_shape={tuple(tgt.shape)}",
+                                flush=True,
+                            )
+                            self._warned_nan_train = True
 
-                                out_min, out_max = _safe_min_max(out)
-                                tgt_min, tgt_max = _safe_min_max(tgt)
-                                print(
-                                    "[WARN] NaN/Inf detected in train batch "
-                                    f"{count}: out_nan={out_nan} out_inf={out_inf} "
-                                    f"tgt_nan={tgt_nan} tgt_inf={tgt_inf} "
-                                    f"out_min={out_min} out_max={out_max} "
-                                    f"tgt_min={tgt_min} tgt_max={tgt_max} "
-                                    f"out_shape={tuple(out.shape)} "
-                                    f"tgt_shape={tuple(tgt.shape)}",
-                                    flush=True,
-                                )
-                                self._warned_nan_train = True
-
-                        loss = self.loss_function(
-                            task["y_target"], out, prev_step, fix_sigma=fix_sigma
-                        )
+                    loss = self.loss_function(
+                        task["y_target"], out, prev_step, fix_sigma=fix_sigma
+                    )
 
                     loss.backward()
                     tepoch.set_postfix(loss=loss.item())
