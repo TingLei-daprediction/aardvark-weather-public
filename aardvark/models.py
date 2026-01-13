@@ -394,6 +394,23 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+            spatial = [enc.shape[-2:] for enc in encodings]
+            if len(set(spatial)) != 1:
+                try:
+                    import torch.distributed as dist
+
+                    rank = (
+                        dist.get_rank()
+                        if dist.is_available() and dist.is_initialized()
+                        else -1
+                    )
+                except Exception:
+                    rank = -1
+                print(
+                    f"[DEBUG][rank {rank}] encoding spatial mismatch: "
+                    f"{[tuple(enc.shape) for enc in encodings]}"
+                )
+                raise RuntimeError(f"Encoding spatial mismatch: {spatial}")
             x = torch.cat(encodings, dim=1)
 
         else:
