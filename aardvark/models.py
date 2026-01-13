@@ -394,6 +394,16 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+            if not getattr(self, "_debug_encoding_nans", False):
+                for i, enc in enumerate(encodings):
+                    enc_nan = torch.isnan(enc).sum().item()
+                    enc_inf = torch.isinf(enc).sum().item()
+                    if enc_nan or enc_inf:
+                        print(
+                            f"[DEBUG] encodings[{i}] nan={enc_nan} inf={enc_inf} "
+                            f"min={enc.min().item():.6g} max={enc.max().item():.6g}"
+                        )
+                self._debug_encoding_nans = True
             spatial = [enc.shape[-2:] for enc in encodings]
             if len(set(spatial)) != 1:
                 try:
@@ -412,6 +422,14 @@ class ConvCNPWeather(nn.Module):
                 )
                 raise RuntimeError(f"Encoding spatial mismatch: {spatial}")
             x = torch.cat(encodings, dim=1)
+            if not getattr(self, "_debug_concat_nans", False):
+                x_nan = torch.isnan(x).sum().item()
+                x_inf = torch.isinf(x).sum().item()
+                print(
+                    f"[DEBUG] concat nan={x_nan} inf={x_inf} "
+                    f"min={x.min().item():.6g} max={x.max().item():.6g}"
+                )
+                self._debug_concat_nans = True
 
         else:
             x = task["y_context"]
@@ -426,6 +444,14 @@ class ConvCNPWeather(nn.Module):
         else:
             x = nn.functional.interpolate(x, size=(256, 128))
             x = self.decoder_lr(x, film_index=(task["lt"] * 0) + 1)
+        if not getattr(self, "_debug_decoder_nans", False):
+            x_nan = torch.isnan(x).sum().item()
+            x_inf = torch.isinf(x).sum().item()
+            print(
+                f"[DEBUG] decoder nan={x_nan} inf={x_inf} "
+                f"min={x.min().item():.6g} max={x.max().item():.6g}"
+            )
+            self._debug_decoder_nans = True
 
         # Process outputs
 
