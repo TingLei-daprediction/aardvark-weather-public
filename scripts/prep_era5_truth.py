@@ -80,6 +80,12 @@ def parse_args():
         default="6H",
         help="Output frequency: 6H or 1D (daily 00 UTC)",
     )
+    p.add_argument(
+        "--fill_nan",
+        type=float,
+        default=None,
+        help="Optional value to replace NaNs/Inf in output memmaps (e.g. 0.0).",
+    )
     return p.parse_args()
 
 
@@ -149,10 +155,10 @@ def main():
         "vertical_velocity": "w",
     }
 
-    # Accumulate for mean/std across all years
+    # Accumulate for mean/std across all years (NaN-aware)
     sum_channels = None
     sumsq_channels = None
-    count = 0
+    count_channels = None
 
     for year in args.years:
         glob_pat = args.pattern.format(year=year)
@@ -218,23 +224,32 @@ def main():
         freq_tag = "6" if args.time_freq == "6H" else "1d"
         memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_{freq_tag}_{year}.memmap"
         print(f"[INFO] Writing {memmap_path} with shape {arr.shape}")
+        if args.fill_nan is not None:
+            arr = np.nan_to_num(
+                arr,
+                nan=args.fill_nan,
+                posinf=args.fill_nan,
+                neginf=args.fill_nan,
+            )
         write_memmap(year, arr, memmap_path)
 
         # Update running sums for mean/std (per-channel over time+space)
         if sum_channels is None:
             sum_channels = np.zeros((arr.shape[1],), dtype=np.float64)
             sumsq_channels = np.zeros((arr.shape[1],), dtype=np.float64)
-        sum_channels += arr.sum(axis=(0, 2, 3))
-        sumsq_channels += np.square(arr, dtype=np.float64).sum(axis=(0, 2, 3))
-        count += arr.shape[0] * arr.shape[2] * arr.shape[3]
+            count_channels = np.zeros((arr.shape[1],), dtype=np.int64)
+        valid = np.isfinite(arr)
+        sum_channels += np.nansum(arr, axis=(0, 2, 3))
+        sumsq_channels += np.nansum(np.square(arr, dtype=np.float64), axis=(0, 2, 3))
+        count_channels += valid.sum(axis=(0, 2, 3))
 
-    if count == 0:
+    if count_channels is None or count_channels.sum() == 0:
         print("[WARN] No data processed; exiting without norms.")
         return
 
     # Compute mean/std per channel (over time, lon, lat)
-    mean = sum_channels / count
-    var = sumsq_channels / count - np.square(mean)
+    mean = sum_channels / count_channels
+    var = sumsq_channels / count_channels - np.square(mean)
     std = np.sqrt(np.clip(var, 0, None)) + 1e-8
 
     mean_path = norms_dir / f"mean_{args.era5_mode}_1.npy"

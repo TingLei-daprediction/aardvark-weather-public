@@ -45,3 +45,7 @@ Notes
 - cltorg bug? note: `aardvark/vit.py` per_var_embedding=False path was inconsistent:
   MLP outputs 256 channels but PatchEmbed expected `in_channels` (e.g., 277).
   Fixed by setting PatchEmbed in_channels to 256 and leaving commented original lines.
+- ERA5 NaN note: pressure-level ERA5 fields can contain NaNs at some grid points (not whole timesteps),
+  which poisoned mean/std in `mean_4u_sfc_1.npy`/`std_4u_sfc_1.npy` when using plain sums.
+  Best practice: use NaN-aware stats (`np.nansum` + per-channel valid counts) and optionally
+  fill NaN/Inf in memmaps via `--fill_nan 0.0` in `scripts/prep_era5_truth.py` before training.
