@@ -16,6 +16,26 @@ Loading GEO
 Loading HADISD
 Loading ASCAT
 Loading ERA5
+[INFO] train_dataset len=728 val_dataset len=363
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+Loading IGRA
+Loading AMSU-A
+Loading AMSU-B
+Loading ICOADS
+Loading IASI
+Loading GEO
+Loading HADISD
+Loading ASCAT
+Loading ERA5
+[INFO] train_dataset len=728 val_dataset len=363
 Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
 [DEBUG] encodings[0] shape: (6, 45, 240, 121)
@@ -30,24 +50,6 @@ Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] encodings[9] shape: (6, 4, 240, 121)
 [DEBUG] encodings[10] shape: (6, 24, 240, 121)
 [DEBUG] encodings[11] shape: (6, 5, 240, 121)
-Loading IGRA
-Loading AMSU-A
-Loading AMSU-B
-Loading ICOADS
-Loading IASI
-Loading GEO
-Loading HADISD
-Loading ASCAT
-Loading ERA5
-Loading IGRA
-Loading AMSU-A
-Loading AMSU-B
-Loading ICOADS
-Loading IASI
-Loading GEO
-Loading HADISD
-Loading ASCAT
-Loading ERA5
 Warning: weights path not found, skipping load: for-checking-point
 [DEBUG] era5_mode 4u_sfc time_freq 1D era5_frame_shape (30, 240, 121) means_shape (30, 1, 1) stds_shape (30, 1, 1)
 [DEBUG] encodings[0] shape: (6, 45, 240, 121)
