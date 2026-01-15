@@ -323,6 +323,7 @@ def main(rank, world_size, output_dir, args):
             amsua_channels=amsua_channels,
             amsub_channels=amsub_channels,
             hirs_channels=hirs_channels,
+            expected_in_channels=expected_in_channels,
         )
 
     # Instantiate loaders

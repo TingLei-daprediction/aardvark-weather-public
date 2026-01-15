@@ -33,12 +33,18 @@ class ConvCNPWeather(nn.Module):
         amsua_channels=13,
         amsub_channels=12,
         hirs_channels=26,
+        expected_in_channels=None,
     ):
 
         super().__init__()
 
         self.device = device
 
+        if expected_in_channels is not None and in_channels != expected_in_channels:
+            raise ValueError(
+                f"in_channels={in_channels} does not match expected "
+                f"{expected_in_channels} for current settings"
+            )
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.int_channels = int_channels
