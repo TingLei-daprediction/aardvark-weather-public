@@ -1,10 +1,10 @@
 #!/bin/bash
-# 1-GPU single-node training run (cleaner logs per task)
+# 2-GPU multi-node training run (1 GPU per node, cleaner logs per task)
 #SBATCH -A fv3-cam
-#SBATCH -J av-da-1gpu
+#SBATCH -J av-da-2gpu
 #SBATCH -p u1-h100
 #SBATCH -q gpuwf
-#SBATCH -N 1
+#SBATCH -N 2
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=1
 #SBATCH --gpus-per-task=1
@@ -12,8 +12,8 @@
 #SBATCH --mem=0
 #SBATCH --open-mode=truncate
 #SBATCH -t 0:30:00
-#SBATCH -o dd-1gpu-%t.out
-#SBATCH -e dd-1gpu-%t.err
+#SBATCH -o dd-2gpu-%t.out
+#SBATCH -e dd-2gpu-%t.err
 
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 set -euo pipefail
@@ -24,10 +24,19 @@ weights_dir="for-checking-point"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/"
 model_data_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/"
 
-python ../aardvark/train_module.py \
+export MASTER_ADDR=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+export MASTER_PORT=12348
+
+torchrun \
+  --nnodes="$SLURM_NNODES" \
+  --nproc_per_node=1 \
+  --node_rank="$SLURM_NODEID" \
+  --master_addr="$MASTER_ADDR" \
+  --master_port="$MASTER_PORT" \
+  ../aardvark/train_module.py \
   --output_dir "$output_dir" \
   --weights_dir "$weights_dir" \
-  --master_port 12348 \
+  --master_port "$MASTER_PORT" \
   --decoder vit_assimilation \
   --loss rmse \
   --diff 0 \
