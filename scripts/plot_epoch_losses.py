@@ -70,7 +70,8 @@ def main():
             try:
                 cur = int(match.group(1))
                 total = int(match.group(2))
-                loss = float(match.group(3))
+                loss_str = match.group(3).rstrip("]")
+                loss = float(loss_str)
                 batch_losses.append(loss)
                 cur_epoch.append(loss)
                 if cur == total:
