@@ -59,25 +59,26 @@ def main():
         # Parse tqdm lines like "365/365 ... loss=0.67".
         # Use the "cur/total" fields to group batch losses into epochs and
         # compute an epoch-mean loss per full pass through the data.
-        pattern = re.compile(r"\b(\d+)/(\d+).*loss=([0-9.+-eE]+)")
+        pattern = re.compile(r"\b(\d+)/(\d+).*?loss=([0-9.+-eE]+)")
         batch_losses = []
         epoch_means = []
         cur_epoch = []
-        for line in err_path.read_text(errors="ignore").splitlines():
-            match = pattern.search(line)
-            if match:
-                try:
-                    cur = int(match.group(1))
-                    total = int(match.group(2))
-                    loss = float(match.group(3))
-                    batch_losses.append(loss)
-                    cur_epoch.append(loss)
-                    if cur == total:
-                        # End of an epoch: average all batch losses in this epoch.
-                        epoch_means.append(float(np.mean(cur_epoch)))
-                        cur_epoch = []
-                except ValueError:
-                    pass
+        raw = err_path.read_text(errors="ignore")
+        # tqdm writes carriage returns; normalize so regex can see each update.
+        raw = raw.replace("\r", "\n")
+        for match in pattern.finditer(raw):
+            try:
+                cur = int(match.group(1))
+                total = int(match.group(2))
+                loss = float(match.group(3))
+                batch_losses.append(loss)
+                cur_epoch.append(loss)
+                if cur == total:
+                    # End of an epoch: average all batch losses in this epoch.
+                    epoch_means.append(float(np.mean(cur_epoch)))
+                    cur_epoch = []
+            except ValueError:
+                continue
         if not batch_losses:
             raise RuntimeError("No loss values found in err file.")
         train_mean = np.array(epoch_means)
