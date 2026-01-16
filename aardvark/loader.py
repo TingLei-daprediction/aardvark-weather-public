@@ -59,6 +59,17 @@ class WeatherDataset(Dataset):
             self.index = np.array([i for i, d in enumerate(self.dates) if d.month >= 7])
         else:
             self.index = np.array(range(len(self.dates)))
+        if self.index.size == 0:
+            print(
+                f"[WARN] Empty date index: start={self.start_date} end={self.end_date} "
+                f"time_freq={self.time_freq} filter_dates={self.filter_dates}"
+            )
+        for key, mapping in self.offsets.items():
+            if self.start_date not in mapping:
+                print(
+                    f"[WARN] start_date {self.start_date} not in offsets for {key}; "
+                    "dataset may be empty or misaligned."
+                )
 
         # Load the input modalities
         if not self.disable_igra:
