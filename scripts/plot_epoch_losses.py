@@ -59,7 +59,7 @@ def main():
         # Parse tqdm lines like "365/365 ... loss=0.67".
         # Use the "cur/total" fields to group batch losses into epochs and
         # compute an epoch-mean loss per full pass through the data.
-        pattern = re.compile(r"\\b(\\d+)/(\\d+).*loss=([0-9.+-eE]+)")
+        pattern = re.compile(r"\b(\d+)/(\d+).*loss=([0-9.+-eE]+)")
         batch_losses = []
         epoch_means = []
         cur_epoch = []
