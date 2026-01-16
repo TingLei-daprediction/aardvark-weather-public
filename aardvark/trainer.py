@@ -273,7 +273,9 @@ class DDPTrainer:
 
             self.model.train()
             train_loss = []
-            with tqdm(self.train_loader, unit="batch") as tepoch:
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            with tqdm(self.train_loader, unit="batch", disable=not use_tqdm) as tepoch:
+                tepoch.set_description(f"epoch {epoch + 1}/{n_epochs}")
                 for count, task in enumerate(tepoch):
                     out = self.model(task, film_index=0)
 
@@ -330,6 +332,12 @@ class DDPTrainer:
 
             epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, epoch)
             train_loss = np.mean(train_loss)
+            if self.rank == 0:
+                print(
+                    f"[INFO] epoch {epoch + 1}/{n_epochs} "
+                    f"train_loss={train_loss:.6f} val_loss={epoch_loss:.6f}",
+                    flush=True,
+                )
             ll.append(log_loss_unnorm)
 
             self.losses.append(epoch_loss)
@@ -483,7 +491,10 @@ class DDPTrainerE2E:
             targets = []
             stations = []
             indices = []
-            for count, task in tqdm(enumerate(self.val_loader)):
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            for count, task in tqdm(
+                enumerate(self.val_loader), disable=not use_tqdm
+            ):
 
                 out = self.model(task, film_index=0)
                 forecasts.append(
@@ -710,8 +721,11 @@ class DDPTrainerE2E:
 
             self.model.train()
             train_loss = []
-            with tqdm(self.train_loader, unit="batch") as tepoch:
-                for count, task in tqdm(enumerate(tepoch)):
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            with tqdm(self.train_loader, unit="batch", disable=not use_tqdm) as tepoch:
+                for count, task in tqdm(
+                    enumerate(tepoch), disable=not use_tqdm
+                ):
                     out = self.model(task, film_index=0)
 
                     loss = self.loss_function(
