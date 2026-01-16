@@ -10,9 +10,10 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=0
 #SBATCH --open-mode=truncate
-#SBATCH -t 0:30:00
-#SBATCH -o dd.out
-#SBATCH -e dd.err
+#SBATCH -t 40:30:00
+#SBATCH -o dd-%t.out
+#SBATCH -e dd-%t.err
+
 
 
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env 
@@ -39,13 +40,13 @@ python ../aardvark/train_module.py \
   --batch_size 6 \
   --start_ind 0 \
   --end_ind 30 \
-  --epoch 100 \
+  --epoch 300 \
   --weight_per_variable 1 \
   --data_path "$data_root" \
   --aux_data_path "$data_root" \
   --model_data_path "$model_data_dir" \
   --assim_train_start_date 2007-01-02 \
-  --assim_train_end_date 2008-12-31 \
+  --assim_train_end_date 2018-12-31 \
   --assim_val_start_date 2019-01-01 \
   --assim_val_end_date 2019-12-31 \
   --time_freq 1D
