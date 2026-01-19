@@ -37,6 +37,23 @@ Notes
 - (Optional) Build climatology for 4u_sfc:
   `python scripts/build_climatology.py --data_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019`
 - Train with `--era5_mode 4u_sfc --out_channels 30`
+- Processor (forecast) input channels: loader builds y_context as concat(y_context_obs + elev(4) + aux_time(5)).
+  For 4u_sfc, strict derivation would be 30 + 4 + 5 = 39 channels.
+  The original 4u processor script uses 35 (24+11), so 4u_sfc script mirrors that as 41 (30+11).
+  This is a known uncertainty; consider asserting against loader-derived channels for forecast mode.
+- Decoder (downscaling) uses AardvarkICDataset/ForecastLoader context with era5_mode-specific norms.
+  4u_sfc adds 30-channel context; new scripts train_decoder_4u_sfc.sh set in_channels 42 (legacy +12 pattern).
+  This is another uncertainty; verify expected channels from y_context composition before final runs.
+- End-to-end: added training scripts for 4u_sfc without changing default 4u behavior.
+
+Processor/decoder setup uncertainty summary (for external review)
+- Processor (forecast) input y_context is built as concat(ERA5/IC fields + elev(4) + aux_time(5)).
+  Strict derivation gives 24+9=33 channels for 4u and 30+9=39 for 4u_sfc.
+  Legacy scripts use in_channels=35 for 4u, implying +11; mirrored to 41 for 4u_sfc.
+  Unclear if paper includes extra channels (e.g., climatology, masks, or legacy conventions).
+- Decoder (downscaling) input channels: legacy script uses in_channels=36 for 4u (implies +12).
+  Mirrored to 42 for 4u_sfc. Also unclear vs strict +9 derivation.
+- Need to verify paper’s exact processor/decoder input composition and channel counts.
 - Bug note: `models.py` used `torch.ones_like(elev[:, :5, ...])` to size aux_time grids.
   `elev` has 4 channels (orog, lsm, sin(lat), cos(lat)), so this mismatched aux_time (5 features).
   Fix: size the aux_time grid using `aux_time_current.shape[1]` instead of `elev` channels.

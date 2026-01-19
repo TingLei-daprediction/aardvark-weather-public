@@ -215,7 +215,7 @@ if __name__ == "__main__":
     parser.add_argument("--master_port", default="12345")
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--lead_time", type=int)
-    parser.add_argument("--era5_mode", default="4u_sfc")
+    parser.add_argument("--era5_mode", default="4u")
     parser.add_argument("--sf_model_path")
     parser.add_argument("--se_model_path")
     parser.add_argument("--forecast_model_path")

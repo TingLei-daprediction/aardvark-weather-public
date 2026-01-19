@@ -1,0 +1,17 @@
+python3 ../aardvark/e2e_train.py \
+    --output_dir E2E_OUT/ \
+    --loss lw_rmse_pressure_weighted \
+    --batch_size 3 \
+    --epoch 10 \
+    --master_port 12345 \
+    --lr 5e-5 \
+    --lead_time 1 \
+    --era5_mode 4u_sfc \
+    --sf_model_path PATH_TO_SF_MODEL \
+    --se_model_path PATH_TO_ENCODER_MODEL \
+    --forecast_model_path PATH_TO_FORECAST_MODEL \
+    --weight_decay 1e-6 \
+    --res 1 \
+    --frequency 6 \
+    --region global \
+    --var tas

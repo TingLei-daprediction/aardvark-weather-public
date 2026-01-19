@@ -1039,6 +1039,7 @@ class AardvarkICDataset(Dataset):
         start_date,
         end_date,
         lead_time=0,
+        era5_mode="4u",
         data_path=None,
         aux_data_path=None,
         encoder_predictions_path=None,
@@ -1052,8 +1053,10 @@ class AardvarkICDataset(Dataset):
         self.encoder_predictions_path = (
             encoder_predictions_path or "path_to_encoder_predictions/"
         )
+        self.era5_mode = era5_mode
         self.time_freq = time_freq
         offset_factor = 4 if self.time_freq == "6H" else 1
+        channels = 30 if self.era5_mode == "4u_sfc" else 24
 
         if lead_time == 0:
             # If leadtime is 0 load the output of the encoder
@@ -1073,7 +1076,7 @@ class AardvarkICDataset(Dataset):
                 self.encoder_predictions_path + ic_fname,
                 dtype="float32",
                 mode="r",
-                shape=(len(dates), 121, 240, 24),  # shape of the output
+                shape=(len(dates), 121, 240, channels),  # shape of the output
             )
         else:
             # if leadtime >0 load the forecast generated from the encoder prediction
@@ -1091,7 +1094,7 @@ class AardvarkICDataset(Dataset):
             dates = pd.date_range(start_date, end_date, freq=self.time_freq)[
                 (lead_time) * offset_factor :
             ]
-            ic_shape = (len(dates), 121, 240, 24)
+            ic_shape = (len(dates), 121, 240, channels)
 
             self.data = np.memmap(
                 self.data_path + "forecast_finetune/" + ic_fname,
@@ -1103,8 +1106,12 @@ class AardvarkICDataset(Dataset):
         self.device = device
 
         # Normalisation
-        mean_factors_path = self.aux_data_path + f"norm_factors/mean_4u_1.npy"
-        std_factors_path = self.aux_data_path + f"norm_factors/std_4u_1.npy"
+        mean_factors_path = (
+            self.aux_data_path + f"norm_factors/mean_{self.era5_mode}_1.npy"
+        )
+        std_factors_path = (
+            self.aux_data_path + f"norm_factors/std_{self.era5_mode}_1.npy"
+        )
         self.means = np.load(mean_factors_path)[:, np.newaxis, np.newaxis, ...]
         self.stds = np.load(std_factors_path)[:, np.newaxis, np.newaxis, ...]
 
@@ -1207,6 +1214,7 @@ class WeatherDatasetDownscaling(Dataset):
                 start_date,
                 end_date,
                 lead_time,
+                era5_mode=era5_mode,
                 data_path=self.data_path,
                 aux_data_path=self.aux_data_path,
                 time_freq=self.time_freq,
@@ -1386,6 +1394,7 @@ class ForecasterDatasetDownscaling(Dataset):
         mode,
         device,
         forecast_path,
+        era5_mode="4u",
         region="global",
         data_path=None,
         aux_data_path=None,
@@ -1403,17 +1412,23 @@ class ForecasterDatasetDownscaling(Dataset):
         self.end_date = end_date
         self.lead_time = lead_time
         self.mode = mode
+        self.era5_mode = era5_mode
         self.data_path = data_path or "path_to_data/"
         self.aux_data_path = aux_data_path or "path_to_auxiliary_data/"
         self.time_freq = time_freq
         self.offset = np.timedelta64(lead_time, "D").astype("timedelta64[ns]")
         self.offset_factor = 4 if self.time_freq == "6H" else 1
+        self.channels = 30 if self.era5_mode == "4u_sfc" else 24
 
         self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)[:-30]
 
         # Normalisation
-        self.means = np.load(self.aux_data_path + "norm_factors/mean_4u_1.npy")
-        self.stds = np.load(self.aux_data_path + "norm_factors/std_4u_1.npy")
+        self.means = np.load(
+            self.aux_data_path + f"norm_factors/mean_{self.era5_mode}_1.npy"
+        )
+        self.stds = np.load(
+            self.aux_data_path + f"norm_factors/std_{self.era5_mode}_1.npy"
+        )
 
         # Load auxiliary data
         self.load_npy_file()
@@ -1467,7 +1482,7 @@ class ForecasterDatasetDownscaling(Dataset):
             "path_to_forecasts/forecast_{}.mmap".format(self.mode),
             dtype="float32",
             mode="r",
-            shape=(len(dates), 121, 240, 24, 11),
+            shape=(len(dates), 121, 240, self.channels, 11),
         )
 
         return
@@ -1594,6 +1609,7 @@ class ForecastLoader(Dataset):
         self.finetune_step = finetune_step
         self.finetune_eval_every = finetune_eval_every
         self.eval_steps = eval_steps
+        channels = 30 if self.era5_mode == "4u_sfc" else 24
 
         if self.frequency == 6:
             self.lead_time = self.lead_time * 4
@@ -1620,7 +1636,7 @@ class ForecastLoader(Dataset):
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
                     240,
-                    24,
+                    channels,
                 )
             elif self.mode == "val":
                 self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
@@ -1628,7 +1644,7 @@ class ForecastLoader(Dataset):
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
                     240,
-                    24,
+                    channels,
                 )
             elif self.mode == "test":
                 self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
@@ -1636,7 +1652,7 @@ class ForecastLoader(Dataset):
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
                     240,
-                    24,
+                    channels,
                 )
 
             if self.finetune_step > 1:
@@ -1660,7 +1676,7 @@ class ForecastLoader(Dataset):
         elif self.ic_path is not None:
             if self.mode == "train":
                 self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
-            ic_shape = (len(self.dates), 121, 240, 24)
+            ic_shape = (len(self.dates), 121, 240, channels)
 
             self.ic = np.memmap(
                 self.ic_path + "/ic_{}.mmap".format(self.mode),
@@ -2032,6 +2048,7 @@ class WeatherDatasetE2E(WeatherDataset):
             mode=mode,
             device=device,
             forecast_path=None,
+            era5_mode=era5_mode,
             region=region,
         )
 
