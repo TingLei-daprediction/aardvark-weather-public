@@ -19,7 +19,11 @@ python3 ../aardvark/train_module.py \
     --downscaling_train_end_date 2017-12-31 \
     --lead_time 4 \
     --var tas \
-    --era5_mode 4u_sfc
+    --era5_mode 4u_sfc \
+    --data_path DATA_ROOT/ \
+    --aux_data_path DATA_ROOT/ \
+    --model_data_path MODEL_DATA_DIR/ \
+    --time_freq 1D
 
 python3 ../aardvark/train_module.py \
     --output_dir DECODER/WS \
@@ -42,4 +46,8 @@ python3 ../aardvark/train_module.py \
     --downscaling_train_end_date 2017-12-31 \
     --lead_time 4 \
     --var ws \
-    --era5_mode 4u_sfc
+    --era5_mode 4u_sfc \
+    --data_path DATA_ROOT/ \
+    --aux_data_path DATA_ROOT/ \
+    --model_data_path MODEL_DATA_DIR/ \
+    --time_freq 1D
