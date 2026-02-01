@@ -209,6 +209,8 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                start_date=args.forecast_train_start_date,
+                end_date=args.forecast_train_end_date,
                 data_path=args.data_path,
                 aux_data_path=args.aux_data_path,
             )
@@ -222,6 +224,8 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                start_date=args.forecast_val_start_date,
+                end_date=args.forecast_val_end_date,
                 data_path=args.data_path,
                 aux_data_path=args.aux_data_path,
             )
@@ -414,6 +418,10 @@ if __name__ == "__main__":
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
     parser.add_argument("--assim_val_end_date", default="2019-12-31")
+    parser.add_argument("--forecast_train_start_date", default="2007-01-02")
+    parser.add_argument("--forecast_train_end_date", default="2017-12-31")
+    parser.add_argument("--forecast_val_start_date", default="2019-01-01")
+    parser.add_argument("--forecast_val_end_date", default="2019-12-31")
     parser.add_argument("--data_path", default="path_to_data/")
     parser.add_argument("--aux_data_path", default="path_to_auxiliary_data/")
     parser.add_argument("--model_data_path", default="../data/")

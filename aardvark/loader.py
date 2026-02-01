@@ -1583,6 +1583,8 @@ class ForecastLoader(Dataset):
         finetune_step=None,
         finetune_eval_every=100,
         eval_steps=False,
+        start_date=None,
+        end_date=None,
         data_path=None,
         aux_data_path=None,
     ):
@@ -1618,20 +1620,28 @@ class ForecastLoader(Dataset):
         else:
             freq = "1D"
 
-        if self.mode == "train":
-            self.dates = pd.date_range("1979-01-01", "2017-12-31", freq=freq)
-        elif self.mode == "tune":
-            self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
-        elif self.mode == "test":
-            self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
-        elif self.mode == "val":
-            self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
+        if start_date is not None or end_date is not None:
+            if not start_date or not end_date:
+                raise ValueError("Both start_date and end_date are required for ForecastLoader.")
+            self.dates = pd.date_range(start_date, end_date, freq=freq)
+        else:
+            if self.mode == "train":
+                self.dates = pd.date_range("1979-01-01", "2017-12-31", freq=freq)
+            elif self.mode == "tune":
+                self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
+            elif self.mode == "test":
+                self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
+            elif self.mode == "val":
+                self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
 
         # Load the predictions from the previous leadtime to be the new context set
         if self.finetune_step is not None:
 
             if self.mode == "train":
-                self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
+                if start_date is not None and end_date is not None:
+                    self.dates = pd.date_range(start_date, end_date, freq=freq)
+                else:
+                    self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
@@ -1639,7 +1649,10 @@ class ForecastLoader(Dataset):
                     channels,
                 )
             elif self.mode == "val":
-                self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
+                if start_date is not None and end_date is not None:
+                    self.dates = pd.date_range(start_date, end_date, freq=freq)
+                else:
+                    self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
@@ -1647,7 +1660,10 @@ class ForecastLoader(Dataset):
                     channels,
                 )
             elif self.mode == "test":
-                self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
+                if start_date is not None and end_date is not None:
+                    self.dates = pd.date_range(start_date, end_date, freq=freq)
+                else:
+                    self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
                     121,
@@ -1675,7 +1691,10 @@ class ForecastLoader(Dataset):
 
         elif self.ic_path is not None:
             if self.mode == "train":
-                self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
+                if start_date is not None and end_date is not None:
+                    self.dates = pd.date_range(start_date, end_date, freq=freq)
+                else:
+                    self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
             ic_shape = (len(self.dates), 121, 240, channels)
 
             self.ic = np.memmap(
