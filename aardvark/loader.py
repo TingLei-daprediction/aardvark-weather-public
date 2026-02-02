@@ -1739,86 +1739,95 @@ class ForecastLoader(Dataset):
             .unsqueeze(1)
             .unsqueeze(1)
         )
-        self.diff_means = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/mean_diff_{}_{}.npy".format(
-                        self.era5_mode, self.res
+        if self.diff:
+            self.diff_means = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/mean_diff_{}_{}.npy".format(
+                            self.era5_mode, self.res
+                        )
                     )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
-        self.diff_stds = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/std_diff_{}_{}.npy".format(self.era5_mode, self.res)
+            self.diff_stds = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/std_diff_{}_{}.npy".format(
+                            self.era5_mode, self.res
+                        )
+                    )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
 
-        self.diff_means_1 = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/mean_diff_{}_{}_6h.npy".format(
-                        self.era5_mode, self.res
+            self.diff_means_1 = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/mean_diff_{}_{}_6h.npy".format(
+                            self.era5_mode, self.res
+                        )
                     )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
-        self.diff_stds_1 = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/std_diff_{}_{}_6h.npy".format(
-                        self.era5_mode, self.res
+            self.diff_stds_1 = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/std_diff_{}_{}_6h.npy".format(
+                            self.era5_mode, self.res
+                        )
                     )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
 
-        self.diff_means_2 = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/mean_diff_{}_{}_12h.npy".format(
-                        self.era5_mode, self.res
+            self.diff_means_2 = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/mean_diff_{}_{}_12h.npy".format(
+                            self.era5_mode, self.res
+                        )
                     )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
-        self.diff_stds_2 = (
-            self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/std_diff_{}_{}_12h.npy".format(
-                        self.era5_mode, self.res
+            self.diff_stds_2 = (
+                self.to_tensor(
+                    np.load(
+                        self.data_path
+                        + "norm_factors/std_diff_{}_{}_12h.npy".format(
+                            self.era5_mode, self.res
+                        )
                     )
                 )
+                .unsqueeze(0)
+                .unsqueeze(0)
             )
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
 
-        self.means_dict = {
-            0: self.diff_means,
-            2: self.diff_means_2,
-            3: self.diff_means_1,
-        }
-
-        self.stds_dict = {0: self.diff_stds, 2: self.diff_stds_2, 3: self.diff_stds_1}
+            self.means_dict = {
+                0: self.diff_means,
+                2: self.diff_means_2,
+                3: self.diff_means_1,
+            }
+            self.stds_dict = {
+                0: self.diff_stds,
+                2: self.diff_stds_2,
+                3: self.diff_stds_1,
+            }
+        else:
+            self.means_dict = {}
+            self.stds_dict = {}
 
     def __len__(self):
         if np.logical_and(self.eval_steps, self.mode == "train"):
