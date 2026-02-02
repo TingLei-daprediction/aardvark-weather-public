@@ -1711,6 +1711,8 @@ class ForecastLoader(Dataset):
         elev_mean = self.era5_elev.mean(axis=(1, 2))[:, np.newaxis, np.newaxis]
         elev_std = self.era5_elev.std(axis=(1, 2))[:, np.newaxis, np.newaxis]
         self.era5_elev = (self.era5_elev - elev_mean) / elev_std
+        # Align to (channels, lon, lat) like ERA5 fields used by ForecastLoader.
+        self.era5_elev = np.transpose(self.era5_elev, (0, 2, 1))
 
         # ERA5 ground truth data for training
         self.era5_sfc = [
@@ -1941,7 +1943,6 @@ class ForecastLoader(Dataset):
         hour_cos = np.cos(hour * np.pi / 12) * np.float32(np.ones((1, x, y)))
         doy_sin = np.sin(doy * 2 * np.pi / n_days) * np.float32(np.ones((1, x, y)))
         doy_cos = np.cos(doy * 2 * np.pi / n_days) * np.float32(np.ones((1, x, y)))
-
         return np.concatenate([hour_sin, hour_cos, doy_sin, doy_cos])
 
     def __getitem__(self, index):
@@ -1972,14 +1973,16 @@ class ForecastLoader(Dataset):
 
         # Normalisation
         if self.diff:
-            y_target = (y_target - era5_ts0[:24, ...]).permute(2, 1, 0)
+            channels = 30 if self.era5_mode == "4u_sfc" else 24
+            y_target = (y_target - era5_ts0[:channels, ...]).permute(2, 1, 0)
             y_target = self.norm_era5_tendency(y_target, lt_offset)
-            y_context[:24, ...] = self.norm_era5(y_context[:24, ...])
+            y_context[:channels, ...] = self.norm_era5(y_context[:channels, ...])
 
         else:
             if self.norm:
-                y_context[:24, ...] = self.norm_era5(y_context[:24, ...], lt_offset)
-                y_target = self.norm_era5(y_target, lt_offset)
+                channels = 30 if self.era5_mode == "4u_sfc" else 24
+                y_context[:channels, ...] = self.norm_era5(y_context[:channels, ...])
+                y_target = self.norm_era5(y_target)
             y_target = y_target.permute(2, 1, 0)
 
         if self.rollout:
