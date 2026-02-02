@@ -4,6 +4,7 @@ import subprocess
 
 import numpy as np
 import torch
+import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
