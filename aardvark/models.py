@@ -40,7 +40,11 @@ class ConvCNPWeather(nn.Module):
 
         self.device = device
 
-        if expected_in_channels is not None and in_channels != expected_in_channels:
+        if (
+            expected_in_channels is not None
+            and mode == "assimilation"
+            and in_channels != expected_in_channels
+        ):
             raise ValueError(
                 f"in_channels={in_channels} does not match expected "
                 f"{expected_in_channels} for current settings"
