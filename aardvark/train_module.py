@@ -92,6 +92,16 @@ def expected_in_channels_assimilation(
     return obs_total + aux_total
 
 
+def expected_in_channels_forecast(era5_mode, include_year=False):
+    """
+    Forecast loader y_context = era5/IC fields + elev(4) + time channels.
+    ForecastLoader currently uses 4 time channels (no year).
+    """
+    base = 30 if era5_mode == "4u_sfc" else 24
+    time_ch = 5 if include_year else 4
+    return base + 4 + time_ch
+
+
 def main(rank, world_size, output_dir, args):
     """
     Primary training script for the encoder, processor and decoder modules.
@@ -307,13 +317,23 @@ def main(rank, world_size, output_dir, args):
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
         )
-        if args.in_channels is None:
-            args.in_channels = expected_in_channels
-        elif args.in_channels != expected_in_channels:
-            raise ValueError(
-                f"in_channels={args.in_channels} does not match expected "
-                f"{expected_in_channels} for current settings"
-            )
+        if args.mode == "assimilation":
+            if args.in_channels is None:
+                args.in_channels = expected_in_channels
+            elif args.in_channels != expected_in_channels:
+                raise ValueError(
+                    f"in_channels={args.in_channels} does not match expected "
+                    f"{expected_in_channels} for current settings"
+                )
+        elif args.mode == "forecast":
+            expected_forecast_in = expected_in_channels_forecast(args.era5_mode)
+            if args.in_channels is None:
+                args.in_channels = expected_forecast_in
+            elif args.in_channels != expected_forecast_in:
+                raise ValueError(
+                    f"in_channels={args.in_channels} does not match expected "
+                    f"{expected_forecast_in} for forecast settings"
+                )
         model = ConvCNPWeather(
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
