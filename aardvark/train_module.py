@@ -334,9 +334,12 @@ def main(rank, world_size, output_dir, args):
                     f"in_channels={args.in_channels} does not match expected "
                     f"{expected_forecast_in} for forecast settings"
                 )
+        model_out_channels = args.out_channels
+        if args.mode != "forecast" or model_out_channels is None:
+            model_out_channels = args.end_ind - args.start_ind
         model = ConvCNPWeather(
             in_channels=args.in_channels,
-            out_channels=args.end_ind - args.start_ind,
+            out_channels=model_out_channels,
             int_channels=args.int_channels,
             device=device_name,
             res=args.res,
