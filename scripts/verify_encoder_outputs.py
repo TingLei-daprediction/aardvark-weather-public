@@ -5,6 +5,12 @@ Compare saved encoder prediction and truth arrays from a training run.
 Primary use:
   python scripts/verify_encoder_outputs.py --run_dir /path/to/encoder/output
 
+Examples:
+  python scripts/verify_encoder_outputs.py --run_dir /path/to/run
+  python scripts/verify_encoder_outputs.py --run_dir /path/to/run --plot_channel 5
+  python scripts/verify_encoder_outputs.py --run_dir /path/to/run --sample_index 7 --plot_channel 3
+  python scripts/verify_encoder_outputs.py --run_dir /path/to/run --no_plots
+
 The script prefers unnormalized arrays:
   - unnorm_preds.npy
   - unnorm_targets.npy
@@ -174,7 +180,14 @@ def write_metrics(run_dir: Path, rows, pred_name: str, target_name: str, pred_sh
         writer.writerows(rows)
 
 
-def make_plots(run_dir: Path, rows, pred: np.ndarray, target: np.ndarray, channel: int):
+def make_plots(
+    run_dir: Path,
+    rows,
+    pred: np.ndarray,
+    target: np.ndarray,
+    sample_index: int,
+    channel: int,
+):
     import matplotlib.pyplot as plt
 
     channels = np.array([r["channel"] for r in rows], dtype=int)
@@ -195,19 +208,19 @@ def make_plots(run_dir: Path, rows, pred: np.ndarray, target: np.ndarray, channe
     plt.savefig(run_dir / "metrics_by_channel.png", dpi=150)
     plt.close()
 
-    p = pred[0, ..., channel]
-    t = target[0, ..., channel]
+    p = pred[sample_index, ..., channel]
+    t = target[sample_index, ..., channel]
     d = p - t
     vmax = np.nanmax(np.abs([np.nanmin(t), np.nanmax(t), np.nanmin(p), np.nanmax(p)]))
     dmax = np.nanmax(np.abs(d))
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
     im0 = axes[0].imshow(t, origin="lower", cmap="coolwarm", vmin=-vmax, vmax=vmax)
-    axes[0].set_title(f"Truth ch{channel}")
+    axes[0].set_title(f"Truth sample {sample_index} ch{channel}")
     im1 = axes[1].imshow(p, origin="lower", cmap="coolwarm", vmin=-vmax, vmax=vmax)
-    axes[1].set_title(f"Prediction ch{channel}")
+    axes[1].set_title(f"Prediction sample {sample_index} ch{channel}")
     im2 = axes[2].imshow(d, origin="lower", cmap="bwr", vmin=-dmax, vmax=dmax)
-    axes[2].set_title(f"Diff ch{channel}")
+    axes[2].set_title(f"Diff sample {sample_index} ch{channel}")
     for ax in axes:
         ax.set_xlabel("Lon index")
         ax.set_ylabel("Lat index")
@@ -215,7 +228,10 @@ def make_plots(run_dir: Path, rows, pred: np.ndarray, target: np.ndarray, channe
     fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
     fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
     fig.tight_layout()
-    fig.savefig(run_dir / f"sample_maps_channel_{channel}.png", dpi=150)
+    fig.savefig(
+        run_dir / f"sample_{sample_index}_maps_channel_{channel}.png",
+        dpi=150,
+    )
     plt.close(fig)
 
 
@@ -225,10 +241,19 @@ def main():
     )
     parser.add_argument("--run_dir", required=True, help="Encoder output directory")
     parser.add_argument(
+        "--sample_index",
+        type=int,
+        default=0,
+        help=(
+            "Index along the saved batch dimension to plot. "
+            "This is the sample index within the saved prediction batch, not a datetime."
+        ),
+    )
+    parser.add_argument(
         "--plot_channel",
         type=int,
         default=0,
-        help="Channel index to use for the sample truth/pred/diff map",
+        help="Output channel index to use for the sample truth/pred/diff map",
     )
     parser.add_argument(
         "--no_plots",
@@ -249,6 +274,9 @@ def main():
             f"Expected 4D arrays after alignment, got pred {pred.shape}, target {target.shape}"
         )
 
+    if not (0 <= args.sample_index < pred.shape[0]):
+        raise ValueError(f"--sample_index must be in [0, {pred.shape[0] - 1}]")
+
     if not (0 <= args.plot_channel < pred.shape[-1]):
         raise ValueError(f"--plot_channel must be in [0, {pred.shape[-1] - 1}]")
 
@@ -256,7 +284,14 @@ def main():
     write_metrics(run_dir, rows, pred_name, target_name, pred.shape, target.shape)
 
     if not args.no_plots:
-        make_plots(run_dir, rows, pred, target, args.plot_channel)
+        make_plots(
+            run_dir,
+            rows,
+            pred,
+            target,
+            args.sample_index,
+            args.plot_channel,
+        )
 
     print(f"Wrote verification outputs to {run_dir}")
 
