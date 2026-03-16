@@ -228,11 +228,11 @@ class DDPTrainer:
 
         if log_loss < self.best_loss:
             np.save(
-                self.save_path + "unnorm_preds.npy",
+                self.save_path + f"unnorm_preds_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(out).detach().cpu().numpy(),
             )
             np.save(
-                self.save_path + "unnorm_targets.npy",
+                self.save_path + f"unnorm_targets_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(task["y_target"])
                 .detach()
                 .cpu()
@@ -626,11 +626,11 @@ class DDPTrainerE2E:
 
         if log_loss < self.best_loss:
             np.save(
-                self.save_path + "unnorm_preds.npy",
+                self.save_path + f"unnorm_preds_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(out).detach().cpu().numpy(),
             )
             np.save(
-                self.save_path + "unnorm_targets.npy",
+                self.save_path + f"unnorm_targets_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(task["y_target"])
                 .detach()
                 .cpu()
