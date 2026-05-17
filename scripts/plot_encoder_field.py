@@ -15,6 +15,41 @@ from typing import Optional
 import numpy as np
 
 
+PRESSURE_LEVELS_4U = [850, 700, 500, 200]
+PRESSURE_VARS_4U = [
+    ("z", "geopotential"),
+    ("t", "temperature"),
+    ("r", "relative humidity"),
+    ("u", "u wind"),
+    ("v", "v wind"),
+    ("q", "specific humidity"),
+]
+SURFACE_VARS = [
+    ("t2m", "2m temperature"),
+    ("d2m", "2m dewpoint temperature"),
+    ("u10", "10m u wind"),
+    ("v10", "10m v wind"),
+    ("msl", "mean sea-level pressure"),
+    ("sp", "surface pressure"),
+]
+
+
+def infer_channel_name(channel: int, n_channels: int) -> str:
+    pressure_count = len(PRESSURE_VARS_4U) * len(PRESSURE_LEVELS_4U)
+    if n_channels in (24, 30) and channel < pressure_count:
+        var_index = channel // len(PRESSURE_LEVELS_4U)
+        level_index = channel % len(PRESSURE_LEVELS_4U)
+        short_name, long_name = PRESSURE_VARS_4U[var_index]
+        level = PRESSURE_LEVELS_4U[level_index]
+        return f"{short_name}{level} ({long_name} {level} hPa)"
+
+    if n_channels == 30 and pressure_count <= channel < pressure_count + len(SURFACE_VARS):
+        short_name, long_name = SURFACE_VARS[channel - pressure_count]
+        return f"{short_name} ({long_name})"
+
+    return f"channel {channel}"
+
+
 def load_pair(run_dir: Path, rank: Optional[str], pred_file: Optional[str], target_file: Optional[str]):
     if pred_file or target_file:
         if not pred_file or not target_file:
@@ -135,20 +170,31 @@ def main():
     forecast = pred[args.sample_index, ..., args.channel]
     diff = forecast - truth
 
-    field_lim = symmetric_limit(truth, forecast)
+    finite_fields = np.concatenate(
+        [
+            truth[np.isfinite(truth)].reshape(-1),
+            forecast[np.isfinite(forecast)].reshape(-1),
+        ]
+    )
+    if finite_fields.size:
+        field_min = float(np.min(finite_fields))
+        field_max = float(np.max(finite_fields))
+    else:
+        field_min = -1.0
+        field_max = 1.0
     diff_lim = symmetric_limit(diff)
+    channel_name = args.title or infer_channel_name(args.channel, pred.shape[-1])
 
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.3), constrained_layout=True)
-    title_prefix = f"{args.title} " if args.title else ""
 
-    im0 = axes[0].imshow(truth, origin="lower", cmap="coolwarm", vmin=-field_lim, vmax=field_lim)
-    axes[0].set_title(f"{title_prefix}Truth")
-    im1 = axes[1].imshow(forecast, origin="lower", cmap="coolwarm", vmin=-field_lim, vmax=field_lim)
-    axes[1].set_title(f"{title_prefix}Prediction")
+    im0 = axes[0].imshow(truth, origin="lower", cmap="viridis", vmin=field_min, vmax=field_max)
+    axes[0].set_title("Truth")
+    im1 = axes[1].imshow(forecast, origin="lower", cmap="viridis", vmin=field_min, vmax=field_max)
+    axes[1].set_title("Prediction")
     im2 = axes[2].imshow(diff, origin="lower", cmap="bwr", vmin=-diff_lim, vmax=diff_lim)
-    axes[2].set_title(f"{title_prefix}Prediction - Truth")
+    axes[2].set_title("Prediction - Truth")
 
     for ax in axes:
         ax.set_xlabel("x index")
@@ -158,7 +204,7 @@ def main():
     fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
     fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
     fig.suptitle(
-        f"sample={args.sample_index}, channel={args.channel}\n"
+        f"{channel_name}; sample={args.sample_index}, channel={args.channel}\n"
         f"pred={pred_path.name}, truth={target_path.name}",
         fontsize=10,
     )
