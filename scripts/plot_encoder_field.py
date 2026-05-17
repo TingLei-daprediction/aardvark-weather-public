@@ -10,11 +10,12 @@ Examples:
 
 import argparse
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
 
-def load_pair(run_dir: Path, rank: str | None, pred_file: str | None, target_file: str | None):
+def load_pair(run_dir: Path, rank: Optional[str], pred_file: Optional[str], target_file: Optional[str]):
     if pred_file or target_file:
         if not pred_file or not target_file:
             raise ValueError("--pred_file and --target_file must be provided together")
