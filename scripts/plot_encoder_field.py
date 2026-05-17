@@ -185,6 +185,9 @@ def main():
     diff_lim = symmetric_limit(diff)
     channel_name = args.title or infer_channel_name(args.channel, pred.shape[-1])
 
+    import matplotlib
+
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.3), constrained_layout=True)
