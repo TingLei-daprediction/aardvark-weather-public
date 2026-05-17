@@ -137,7 +137,7 @@ def main(rank, world_size, output_dir, args):
             args.res, era5_mode, args.data_path, args.aux_data_path
         )
     elif args.loss == "rmse":
-        lf = RmseLoss()
+        lf = RmseLoss(start_ind=0, end_ind=args.end_ind - args.start_ind)
     elif args.loss == "downscaling_rmse":
         lf = DownscalingRmseLoss()
 
