@@ -1,8 +1,10 @@
+import os
 import sys
 import subprocess
 
 import numpy as np
 import torch
+import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
@@ -44,6 +46,8 @@ class DDPTrainer:
         self.best_loss = 1000
         self.test_loader = test_loader
 
+        self._load_weights_if_provided(weights_path)
+
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
 
@@ -64,6 +68,33 @@ class DDPTrainer:
         self.losses = []
         self.train_losses = []
         self.maes = []
+
+    def _load_weights_if_provided(self, weights_path):
+        if not weights_path:
+            return
+        if not os.path.exists(weights_path):
+            print(f"Warning: weights path not found, skipping load: {weights_path}")
+            return
+        if os.path.isdir(weights_path):
+            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            return
+
+        checkpoint = torch.load(weights_path, map_location="cpu")
+        if isinstance(checkpoint, dict):
+            state_dict = (
+                checkpoint.get("model_state_dict")
+                or checkpoint.get("state_dict")
+                or checkpoint
+            )
+        else:
+            state_dict = checkpoint
+
+        if isinstance(state_dict, dict) and state_dict:
+            keys = list(state_dict.keys())
+            if keys and keys[0].startswith("module."):
+                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+
+        self.model.load_state_dict(state_dict, strict=False)
 
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
@@ -101,16 +132,20 @@ class DDPTrainer:
                 lf.append(l)
 
                 try:
-                    ic = self.train_loader.dataset.unnorm_base_context(
-                        task["y_context"][:, :-11, ...]
-                    ).permute(0, 3, 2, 1)
+                    if hasattr(self.train_loader.dataset, "unnorm_base_context"):
+                        ic = self.train_loader.dataset.unnorm_base_context(
+                            task["y_context"][:, :-11, ...]
+                        ).permute(0, 3, 2, 1)
+                    else:
+                        ic = None
                     unnorm_pred = self.train_loader.dataset.unnorm_pred(out)
                     unnorm_target = self.train_loader.dataset.unnorm_pred(
                         task["y_target"]
                     )
 
-                    unnorm_pred = unnorm_pred + ic
-                    unnorm_target = unnorm_target + ic
+                    if ic is not None:
+                        unnorm_pred = unnorm_pred + ic
+                        unnorm_target = unnorm_target + ic
 
                     lu = (
                         self.loss_function(
@@ -127,7 +162,37 @@ class DDPTrainer:
 
                     lf_unnorm.append(lu)
 
-                except:
+                except Exception as exc:
+                    if not getattr(self, "_warned_unnorm", False):
+                        debug_info = {
+                            "era5_mode": getattr(
+                                self.train_loader.dataset, "era5_mode", None
+                            ),
+                            "y_target": tuple(task["y_target"].shape)
+                            if "y_target" in task
+                            else None,
+                            "y_context": tuple(task["y_context"].shape)
+                            if "y_context" in task
+                            else None,
+                            "out": tuple(out.shape) if "out" in locals() else None,
+                            "ic": tuple(ic.shape) if "ic" in locals() else None,
+                            "means": getattr(
+                                getattr(self.train_loader.dataset, "means", None),
+                                "shape",
+                                None,
+                            ),
+                            "stds": getattr(
+                                getattr(self.train_loader.dataset, "stds", None),
+                                "shape",
+                                None,
+                            ),
+                        }
+                        print(
+                            f"[WARN] unnorm_pred failed in eval_epoch: {exc} "
+                            f"debug={debug_info}",
+                            flush=True,
+                        )
+                        self._warned_unnorm = True
                     pass
 
             if self.test_loader is not None:
@@ -163,17 +228,20 @@ class DDPTrainer:
 
         if log_loss < self.best_loss:
             np.save(
-                self.save_path + "unnorm_preds.npy",
+                self.save_path + f"unnorm_preds_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(out).detach().cpu().numpy(),
             )
             np.save(
-                self.save_path + "unnorm_targets.npy",
+                self.save_path + f"unnorm_targets_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(task["y_target"])
                 .detach()
                 .cpu()
                 .numpy(),
             )
-        log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
+        if lf_unnorm:
+            log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
+        else:
+            log_loss_unnorm = np.nan
 
         if np.logical_and(self.rank == 0, self.epoch % 5 == 0):
 
@@ -206,10 +274,44 @@ class DDPTrainer:
 
             self.model.train()
             train_loss = []
-            with tqdm(self.train_loader, unit="batch") as tepoch:
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            with tqdm(self.train_loader, unit="batch", disable=not use_tqdm) as tepoch:
+                tepoch.set_description(f"epoch {epoch + 1}/{n_epochs}")
                 for count, task in enumerate(tepoch):
-
                     out = self.model(task, film_index=0)
+
+                    if not getattr(self, "_warned_nan_train", False):
+                        tgt = task["y_target"]
+                        out_nan = torch.isnan(out).any().item()
+                        tgt_nan = torch.isnan(tgt).any().item()
+                        out_inf = torch.isinf(out).any().item()
+                        tgt_inf = torch.isinf(tgt).any().item()
+                        if out_nan or tgt_nan or out_inf or tgt_inf:
+                            def _safe_min_max(tensor):
+                                if hasattr(torch, "nanmin"):
+                                    return (
+                                        torch.nanmin(tensor).item(),
+                                        torch.nanmax(tensor).item(),
+                                    )
+                                inf = torch.tensor(float("inf"), device=tensor.device)
+                                neg_inf = torch.tensor(float("-inf"), device=tensor.device)
+                                t_min = torch.min(torch.where(torch.isnan(tensor), inf, tensor))
+                                t_max = torch.max(torch.where(torch.isnan(tensor), neg_inf, tensor))
+                                return t_min.item(), t_max.item()
+
+                            out_min, out_max = _safe_min_max(out)
+                            tgt_min, tgt_max = _safe_min_max(tgt)
+                            print(
+                                "[WARN] NaN/Inf detected in train batch "
+                                f"{count}: out_nan={out_nan} out_inf={out_inf} "
+                                f"tgt_nan={tgt_nan} tgt_inf={tgt_inf} "
+                                f"out_min={out_min} out_max={out_max} "
+                                f"tgt_min={tgt_min} tgt_max={tgt_max} "
+                                f"out_shape={tuple(out.shape)} "
+                                f"tgt_shape={tuple(tgt.shape)}",
+                                flush=True,
+                            )
+                            self._warned_nan_train = True
 
                     loss = self.loss_function(
                         task["y_target"], out, prev_step, fix_sigma=fix_sigma
@@ -231,6 +333,12 @@ class DDPTrainer:
 
             epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, epoch)
             train_loss = np.mean(train_loss)
+            if self.rank == 0:
+                print(
+                    f"[INFO] epoch {epoch + 1}/{n_epochs} "
+                    f"train_loss={train_loss:.6f} val_loss={epoch_loss:.6f}",
+                    flush=True,
+                )
             ll.append(log_loss_unnorm)
 
             self.losses.append(epoch_loss)
@@ -318,6 +426,8 @@ class DDPTrainerE2E:
         self.test_loader = test_loader
         self.hadisd_variable_name = hadisd_variable_name
 
+        self._load_weights_if_provided(weights_path)
+
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
 
@@ -339,6 +449,33 @@ class DDPTrainerE2E:
 
         self.maes = []
 
+    def _load_weights_if_provided(self, weights_path):
+        if not weights_path:
+            return
+        if not os.path.exists(weights_path):
+            print(f"Warning: weights path not found, skipping load: {weights_path}")
+            return
+        if os.path.isdir(weights_path):
+            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            return
+
+        checkpoint = torch.load(weights_path, map_location="cpu")
+        if isinstance(checkpoint, dict):
+            state_dict = (
+                checkpoint.get("model_state_dict")
+                or checkpoint.get("state_dict")
+                or checkpoint
+            )
+        else:
+            state_dict = checkpoint
+
+        if isinstance(state_dict, dict) and state_dict:
+            keys = list(state_dict.keys())
+            if keys and keys[0].startswith("module."):
+                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+
+        self.model.load_state_dict(state_dict, strict=False)
+
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
 
@@ -355,7 +492,10 @@ class DDPTrainerE2E:
             targets = []
             stations = []
             indices = []
-            for count, task in tqdm(enumerate(self.val_loader)):
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            for count, task in tqdm(
+                enumerate(self.val_loader), disable=not use_tqdm
+            ):
 
                 out = self.model(task, film_index=0)
                 forecasts.append(
@@ -486,11 +626,11 @@ class DDPTrainerE2E:
 
         if log_loss < self.best_loss:
             np.save(
-                self.save_path + "unnorm_preds.npy",
+                self.save_path + f"unnorm_preds_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(out).detach().cpu().numpy(),
             )
             np.save(
-                self.save_path + "unnorm_targets.npy",
+                self.save_path + f"unnorm_targets_{self.rank}.npy",
                 self.train_loader.dataset.unnorm_pred(task["y_target"])
                 .detach()
                 .cpu()
@@ -582,8 +722,11 @@ class DDPTrainerE2E:
 
             self.model.train()
             train_loss = []
-            with tqdm(self.train_loader, unit="batch") as tepoch:
-                for count, task in tqdm(enumerate(tepoch)):
+            use_tqdm = self.rank == 0 and sys.stdout.isatty()
+            with tqdm(self.train_loader, unit="batch", disable=not use_tqdm) as tepoch:
+                for count, task in tqdm(
+                    enumerate(tepoch), disable=not use_tqdm
+                ):
                     out = self.model(task, film_index=0)
 
                     loss = self.loss_function(

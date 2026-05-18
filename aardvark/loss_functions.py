@@ -8,11 +8,18 @@ class RmseLoss(nn.Module):
     RMSE loss
     """
 
-    def __init__(self, start_ind=0, end_ind=24):
+    def __init__(self, start_ind=0, end_ind=24, debug_nan_checks=False):
 
         super().__init__()
         self.start_ind = start_ind
         self.end_ind = end_ind
+        self.debug_nan_checks = debug_nan_checks
+        if not self.debug_nan_checks:
+            print(
+                "[INFO] RmseLoss NaN diagnostics are disabled by default; "
+                "enable with --debug_nan_checks 1.",
+                flush=True,
+            )
 
     def forward(
         self,
@@ -27,6 +34,38 @@ class RmseLoss(nn.Module):
         squared_diff = ((target.to(output.device) - output) ** 2)[
             ..., self.start_ind : self.end_ind
         ]
+        if self.debug_nan_checks and not hasattr(self, "_checked_nan_rmse"):
+            self._checked_nan_rmse = True
+            valid_counts = (~torch.isnan(squared_diff)).sum(dim=(1, 2, 3))
+            if torch.any(valid_counts == 0):
+                batch_idx = torch.where(valid_counts == 0)[0].tolist()
+                tgt = target[..., self.start_ind : self.end_ind]
+                out = output[..., self.start_ind : self.end_ind]
+                def _safe_min_max(tensor):
+                    if hasattr(torch, "nanmin"):
+                        return torch.nanmin(tensor).item(), torch.nanmax(tensor).item()
+                    inf = torch.tensor(float("inf"), device=tensor.device)
+                    neg_inf = torch.tensor(float("-inf"), device=tensor.device)
+                    t_min = torch.min(torch.where(torch.isnan(tensor), inf, tensor))
+                    t_max = torch.max(torch.where(torch.isnan(tensor), neg_inf, tensor))
+                    return t_min.item(), t_max.item()
+
+                tgt_min, tgt_max = _safe_min_max(tgt)
+                out_min, out_max = _safe_min_max(out)
+                print(
+                    "[WARN] RmseLoss: all-NaN squared_diff for batches "
+                    f"{batch_idx}. target shape={tuple(target.shape)} "
+                    f"output shape={tuple(output.shape)} "
+                    f"target_nan={torch.isnan(tgt).sum().item()} "
+                    f"output_nan={torch.isnan(out).sum().item()} "
+                    f"target_inf={torch.isinf(tgt).sum().item()} "
+                    f"output_inf={torch.isinf(out).sum().item()} "
+                    f"target_min={tgt_min} "
+                    f"target_max={tgt_max} "
+                    f"output_min={out_min} "
+                    f"output_max={out_max}",
+                    flush=True,
+                )
         return torch.mean(torch.sqrt(torch.nanmean(squared_diff, dim=(1, 2, 3))))
 
 

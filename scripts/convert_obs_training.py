@@ -172,7 +172,7 @@ def main():
     chan_names = stack_vars(ds, ["bt_channel_"])
     arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lat_name, lon_name, "channel_temp").values.astype("float32")
     write_memmap(out_amsua / "2007_2021_amsua.mmap", arr)
-    save_norms(norms_dir, "amsua", arr, reduce_axes=(0, 2, 3))
+    save_norms(norms_dir, "amsua", arr, reduce_axes=(0, 1, 2))
     shapes["amsua"] = arr.shape
 
     # AMSU-B/MHS
@@ -183,7 +183,7 @@ def main():
     chan_names = stack_vars(ds, ["bt_channel_"])
     arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out_amsub / "2007_2021_amsub.mmap", arr)
-    save_norms(norms_dir, "amsub", arr, reduce_axes=(0, 2, 3))
+    save_norms(norms_dir, "amsub", arr, reduce_axes=(0, 1, 2))
     shapes["amsub"] = arr.shape
 
     # ASCAT
@@ -211,7 +211,7 @@ def main():
     chan_names = [n for n in chan_names if n in ds.data_vars]
     arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out_ascat / "2007_2021_ascat.mmap", arr)
-    save_norms(norms_dir, "ascat", arr, reduce_axes=(0, 2, 3))
+    save_norms(norms_dir, "ascat", arr, reduce_axes=(0, 1, 2))
     shapes["ascat"] = arr.shape
 
     # HIRS
@@ -222,7 +222,9 @@ def main():
     chan_names = stack_vars(ds, ["bt_channel_"])
     arr = xr.concat([ds[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out_hirs / "2007_2021_hirs.mmap", arr)
-    save_norms(norms_dir, "hirs", arr, reduce_axes=(0, 2, 3))
+    save_norms(norms_dir, "hirs", arr, reduce_axes=(0, 1, 2))
+    os.replace(norms_dir / "mean_hirs.npy", norms_dir / "hirs_means.npy")
+    os.replace(norms_dir / "std_hirs.npy", norms_dir / "hirs_stds.npy")
     shapes["hirs"] = arr.shape
 
     # GRIDSAT (assume dims: time, channel, x, y)
@@ -234,6 +236,10 @@ def main():
     arr_sat = xr.concat([ds_sat[n] for n in chans], dim="channel_temp").transpose("time", "channel_temp", "longitude", "latitude").values.astype("float32")
     write_memmap(out_sat / "gridsat_data.mmap", arr_sat)
     save_norms(norms_dir, "sat", arr_sat, reduce_axes=(0, 2, 3))
+    mean_sat = np.load(norms_dir / "mean_sat.npy").reshape(-1, 1, 1)
+    std_sat = np.load(norms_dir / "std_sat.npy").reshape(-1, 1, 1)
+    np.save(norms_dir / "mean_sat.npy", mean_sat)
+    np.save(norms_dir / "std_sat.npy", std_sat)
     shapes["gridsat"] = arr_sat.shape
 
     # IASI (concatenate two files)
@@ -244,7 +250,7 @@ def main():
     chan_names = stack_vars(ds_iasi, ["b1_pc", "b2_pc", "b3_pc"])
     arr_iasi = xr.concat([ds_iasi[n] for n in chan_names], dim="channel_temp").transpose("time", lon_name, lat_name, "channel_temp").values.astype("float32")
     write_memmap(out / "2007_2021_iasi_subset.mmap", arr_iasi)
-    save_norms(norms_dir, "iasi", arr_iasi, reduce_axes=(0, 2, 3))
+    save_norms(norms_dir, "iasi", arr_iasi, reduce_axes=(0, 1, 2))
     shapes["iasi"] = arr_iasi.shape
 
     # IGRA (station)
@@ -267,6 +273,10 @@ def main():
     coords_igra = np.stack([lon_igra, lat_igra], axis=-1).astype("float32")
     write_memmap(out_igra / "1999_2021_igra_x.mmap", coords_igra)
     save_norms(norms_dir, "igra", arr_igra, reduce_axes=(0, 2))
+    mean_igra = np.load(norms_dir / "mean_igra.npy").reshape(-1, 1)
+    std_igra = np.load(norms_dir / "std_igra.npy").reshape(-1, 1)
+    np.save(norms_dir / "mean_igra.npy", mean_igra)
+    np.save(norms_dir / "std_igra.npy", std_igra)
     shapes["igra"] = arr_igra.shape
 
     # ICOADS (station)

@@ -30,26 +30,44 @@ class ConvCNPWeather(nn.Module):
         decoder=None,
         film=False,
         two_frames=False,
+        amsua_channels=13,
+        amsub_channels=12,
+        hirs_channels=26,
+        expected_in_channels=None,
+        debug_nan_checks=False,
     ):
 
         super().__init__()
 
         self.device = device
 
+        if (
+            expected_in_channels is not None
+            and mode == "assimilation"
+            and in_channels != expected_in_channels
+        ):
+            raise ValueError(
+                f"in_channels={in_channels} does not match expected "
+                f"{expected_in_channels} for current settings"
+            )
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.int_channels = int_channels
         self.decoder = decoder
-        self.int_x = 256
-        self.int_y = 128
+        self.int_x = 256  # clt_hard-wired internal grid width for assimilation pathway
+        self.int_y = 128  # clt_hard-wired internal grid height for assimilation pathway
         self.data_path = data_path
         self.mode = mode
         self.film = film
         self.two_frames = two_frames
+        self.amsua_channels = amsua_channels
+        self.amsub_channels = amsub_channels
+        self.hirs_channels = hirs_channels
+        self.debug_nan_checks = debug_nan_checks
 
-        N_SAT_VARS = 2
-        N_ICOADS_VARS = 5
-        N_HADISD_VARS = 5
+        N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
+        N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
+        N_HADISD_VARS = 5  # clt_hard-wired number of HadISD vars used by encoder_hadisd
 
         # Load internal grid longitude-latitude locations
         self.era5_x = (
@@ -66,48 +84,48 @@ class ConvCNPWeather(nn.Module):
         )
 
         self.int_grid = [
-            (torch.linspace(0, 360, 240) / 360).float().cuda(),
-            (torch.linspace(-90, 90, 121) / 360).float().cuda(),
+            (torch.linspace(0, 360, 240) / 360).float().cuda(),  # clt_hard-wired lon grid size
+            (torch.linspace(-90, 90, 121) / 360).float().cuda(),  # clt_hard-wired lat grid size
         ]
 
         self.int_grid = [self.int_grid[0].unsqueeze(0), self.int_grid[1].unsqueeze(0)]
 
         # Create input setconvs for each data modality
         self.ascat_setconvs = convDeepSet(
-            0.001, "OnToOn", density_channel=True, device=self.device
+            0.001, "OnToOn", density_channel=True, device=self.device  # clt_hard-wired lengthscale
         )
         self.amsua_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
-            for _ in range(13)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            for _ in range(self.amsua_channels)
         ]
         self.amsub_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
-            for _ in range(12)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            for _ in range(self.amsub_channels)
         ]
         self.hirs_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
-            for _ in range(26)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            for _ in range(self.hirs_channels)
         ]
 
         self.sat_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_SAT_VARS)
         ]
         self.hadisd_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_HADISD_VARS)
         ]
         self.icoads_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(N_ICOADS_VARS)
         ]
         self.igra_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)
+            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
             for _ in range(24)
         ]
 
         self.sc_out = convDeepSet(
-            0.001, "OnToOff", density_channel=False, device=self.device
+            0.001, "OnToOff", density_channel=False, device=self.device  # clt_hard-wired lengthscale
         )
 
         # Instantiate the decoder. Here decoder refers to decoder in a convCNP (i.e the ViT backbone)
@@ -115,29 +133,29 @@ class ConvCNPWeather(nn.Module):
             self.decoder_lr = ViT(
                 in_channels=in_channels,
                 out_channels=out_channels,
-                h_channels=512,
-                depth=16,
-                patch_size=5,
+                h_channels=512,  # clt_hard-wired ViT hidden width
+                depth=16,  # clt_hard-wired ViT depth
+                patch_size=5,  # clt_hard-wired ViT patch size
                 per_var_embedding=True,
-                img_size=[240, 121],
+                img_size=[240, 121],  # clt_hard-wired image size (matches int_grid)
             )
 
         elif self.decoder == "vit_assimilation":
             self.decoder_lr = ViT(
-                in_channels=256,
+                in_channels=self.in_channels,
                 out_channels=out_channels,
-                h_channels=512,
-                depth=8,
-                patch_size=3,
+                h_channels=512,  # clt_hard-wired ViT hidden width
+                depth=8,  # clt_hard-wired ViT depth
+                patch_size=3,  # clt_hard-wired ViT patch size
                 per_var_embedding=False,
-                img_size=[256, 128],
+                img_size=[256, 128],  # clt_hard-wired image size for assimilation mode
             )
 
         self.mlp = MLP(
             in_channels=out_channels,
             out_channels=out_channels,
-            h_channels=128,
-            h_layers=4,
+            h_channels=128,  # clt_hard-wired MLP hidden width
+            h_layers=4,  # clt_hard-wired MLP depth
         )
         self.break_next = False
 
@@ -204,7 +222,7 @@ class ConvCNPWeather(nn.Module):
         encodings = []
         task["amsua_{}".format(prefix)][..., -1] = np.nan
         task["amsua_{}".format(prefix)][task["amsua_{}".format(prefix)] == 0] = np.nan
-        for i in range(13):
+        for i in range(self.amsua_channels):
             encodings.append(
                 self.amsua_setconvs[i](
                     x_in=task["amsua_x_{}".format(prefix)],
@@ -225,9 +243,9 @@ class ConvCNPWeather(nn.Module):
 
         encodings = []
         task["amsub_{}".format(prefix)][task["amsub_{}".format(prefix)] == 0] = np.nan
-        for i in range(12):
+        for i in range(self.amsub_channels):
             encodings.append(
-                self.amsua_setconvs[i](
+                self.amsub_setconvs[i](
                     x_in=task["amsub_x_{}".format(prefix)],
                     wt=task["amsub_{}".format(prefix)].permute(0, 3, 1, 2)[
                         :, i : i + 1, ...
@@ -247,7 +265,7 @@ class ConvCNPWeather(nn.Module):
         encodings = []
 
         task["hirs_{}".format(prefix)][task["hirs_{}".format(prefix)] == 0] = np.nan
-        for i in range(26):
+        for i in range(self.hirs_channels):
             encodings.append(
                 self.hirs_setconvs[i](
                     x_in=task["hirs_x_{}".format(prefix)],
@@ -315,7 +333,16 @@ class ConvCNPWeather(nn.Module):
                 torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2]),
                 size=(self.int_grid[0].shape[1], self.int_grid[1].shape[1]),
             )
-            elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])
+#cltorg bug            elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])
+
+            def igra_encoding(prefix):
+                if f"igra_{prefix}" in task and f"igra_x_{prefix}" in task:
+                    return self.encoder_igra(task, prefix)
+                batch = task["y_target"].shape[0]
+                return torch.zeros(
+                    (batch, 24, elev.shape[2], elev.shape[3]),
+                    device=elev.device,
+                )
 
             if not self.two_frames:
                 encodings = [
@@ -326,13 +353,25 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "current"),
                     self.encoder_amsua(task, "current"),
                     self.encoder_amsub(task, "current"),
-                    self.encoder_igra(task, "current"),
+                    igra_encoding("current"),
                     self.encoder_hirs(task, "current"),
                     elev,
                     task["climatology_current"],
-                    torch.ones_like(elev[:, :5, ...])
+                    torch.ones(
+                        (
+                            elev.shape[0],
+                            task["aux_time_current"].shape[1],
+                            elev.shape[2],
+                            elev.shape[3],
+                        ),
+                        device=elev.device,
+                    )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+                if not getattr(self, "_debug_encoding_shapes", False):
+                    for i, enc in enumerate(encodings):
+                        print(f"[DEBUG] encodings[{i}] shape: {tuple(enc.shape)}")
+                    self._debug_encoding_shapes = True
             else:
                 # Option to pass two timesteps (t=-1 and t=0) as input
                 encodings = [
@@ -343,7 +382,7 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "current"),
                     self.encoder_amsua(task, "current"),
                     self.encoder_amsub(task, "current"),
-                    self.encoder_igra(task, "current"),
+                    igra_encoding("current"),
                     self.encoder_hirs(task, "current"),
                     self.encoder_iasi(task, "prev"),
                     self.encoder_ascat(task, "prev"),
@@ -352,14 +391,57 @@ class ConvCNPWeather(nn.Module):
                     self.encoder_sat(task, "prev"),
                     self.encoder_amsua(task, "prev"),
                     self.encoder_amsub(task, "prev"),
-                    self.encoder_igra(task, "prev"),
+                    igra_encoding("prev"),
                     self.encoder_hirs(task, "prev"),
                     elev,
                     task["climatology_current"],
-                    torch.ones_like(elev[:, :5, ...])
+                    torch.ones(
+                        (
+                            elev.shape[0],
+                            task["aux_time_current"].shape[1],
+                            elev.shape[2],
+                            elev.shape[3],
+                        ),
+                        device=elev.device,
+                    )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+            if self.debug_nan_checks and not getattr(self, "_debug_encoding_nans", False):
+                for i, enc in enumerate(encodings):
+                    enc_nan = torch.isnan(enc).sum().item()
+                    enc_inf = torch.isinf(enc).sum().item()
+                    if enc_nan or enc_inf:
+                        print(
+                            f"[DEBUG] encodings[{i}] nan={enc_nan} inf={enc_inf} "
+                            f"min={enc.min().item():.6g} max={enc.max().item():.6g}"
+                        )
+                self._debug_encoding_nans = True
+            spatial = [enc.shape[-2:] for enc in encodings]
+            if len(set(spatial)) != 1:
+                try:
+                    import torch.distributed as dist
+
+                    rank = (
+                        dist.get_rank()
+                        if dist.is_available() and dist.is_initialized()
+                        else -1
+                    )
+                except Exception:
+                    rank = -1
+                print(
+                    f"[DEBUG][rank {rank}] encoding spatial mismatch: "
+                    f"{[tuple(enc.shape) for enc in encodings]}"
+                )
+                raise RuntimeError(f"Encoding spatial mismatch: {spatial}")
             x = torch.cat(encodings, dim=1)
+            if self.debug_nan_checks and not getattr(self, "_debug_concat_nans", False):
+                x_nan = torch.isnan(x).sum().item()
+                x_inf = torch.isinf(x).sum().item()
+                print(
+                    f"[DEBUG] concat nan={x_nan} inf={x_inf} "
+                    f"min={x.min().item():.6g} max={x.max().item():.6g}"
+                )
+                self._debug_concat_nans = True
 
         else:
             x = task["y_context"]
@@ -374,6 +456,14 @@ class ConvCNPWeather(nn.Module):
         else:
             x = nn.functional.interpolate(x, size=(256, 128))
             x = self.decoder_lr(x, film_index=(task["lt"] * 0) + 1)
+        if self.debug_nan_checks and not getattr(self, "_debug_decoder_nans", False):
+            x_nan = torch.isnan(x).sum().item()
+            x_inf = torch.isinf(x).sum().item()
+            print(
+                f"[DEBUG] decoder nan={x_nan} inf={x_inf} "
+                f"min={x.min().item():.6g} max={x.max().item():.6g}"
+            )
+            self._debug_decoder_nans = True
 
         # Process outputs
 

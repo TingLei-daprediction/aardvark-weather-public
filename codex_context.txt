@@ -1,0 +1,68 @@
+Aardvark context summary (codex)
+
+- Training entry: aardvark/train_module.py now supports --data_path, --aux_data_path, and --model_data_path.
+- Assimilation window is configurable via:
+  --assim_train_start_date / --assim_train_end_date / --assim_val_start_date / --assim_val_end_date.
+- 4u assimilation (encoder) canonical settings from training/train_encoder.sh:
+  in_channels=277, out_channels=24, int_channels=24, decoder=vit_assimilation, loss=lw_rmse.
+- Model grid files (era5_x/y) are read from model_data_path (defaults to ../data/).
+
+Key data frequency context
+- Original obs NetCDFs (amsua/amsub/ascat/hirs/gridsat/igra/icoads/hadisd/iasi) are daily at 00 UTC.
+  Time range: 2007-01-02 -> 2019-12-30, time length 4746.
+- Added --time_freq (default 6H). Use --time_freq 1D to align loaders to daily obs.
+- Loader offsets now support 6H or 1D via build_offsets in aardvark/loader_utils_new.py.
+- Daily ERA5 truth outputs use filename tag _1d_ in prep_era5_truth.py; 6-hourly uses _6_.
+
+Key code edits in this session
+- aardvark/models.py: added clt_hard-wired comments on fixed constants; IGRA optional encoding zeros when disabled.
+- aardvark/train_module.py: wired data paths and assimilation date window CLI args; added model_data_path;
+  added --disable_igra and --time_freq flags.
+- aardvark/loader.py: data/aux paths now parameterized; daily-mode time_freq support; optional IGRA.
+- aardvark/loader_utils_new.py: build_offsets(freq) added (6H vs 1D).
+- aardvark/trainer.py: checkpoint loading added (warn and continue if missing) and conflict markers resolved.
+
+Notes
+- If using daily obs, either generate daily ERA5 truth with run_prep_era5_truth.sh TIME_FREQ=1D
+  (outputs era5_*_1d_<year>.memmap) or adapt accordingly.
+- IGRA daily data mismatch can be bypassed with --disable_igra 1.
+- Density channel: convDeepSet adds a per-input-channel density mask (1 where valid, 0 where NaN).
+  This doubles channels for convDeepSet-based encoders (AMSU-A/B, HIRS, SAT, ICOADS, HadISD, IGRA);
+  ASCAT/IASI are gridded interpolations and do not get density doubling.
+
+4u_sfc workflow (30 channels = 24 upper-air + 6 surface)
+- Generate truth memmaps (pressure-level + surface): `sbatch run_prep_era5_truth.sh`
+- Compute norms from memmaps:
+  `python scripts/compute_era5_norms.py --data_dir <data_root> --output_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019 --grid_dir <repo>/data/grid_lon_lat --time_freq 1D`
+- (Optional) Build climatology for 4u_sfc:
+  `python scripts/build_climatology.py --data_dir <data_root> --era5_mode 4u_sfc --res 1 --years 2007 2008 ... 2019`
+- Train with `--era5_mode 4u_sfc --out_channels 30`
+- Processor (forecast) input channels: loader builds y_context as concat(y_context_obs + elev(4) + aux_time(5)).
+  For 4u_sfc, strict derivation would be 30 + 4 + 5 = 39 channels.
+  The original 4u processor script uses 35 (24+11), so 4u_sfc script mirrors that as 41 (30+11).
+  This is a known uncertainty; consider asserting against loader-derived channels for forecast mode.
+- Decoder (downscaling) uses AardvarkICDataset/ForecastLoader context with era5_mode-specific norms.
+  4u_sfc adds 30-channel context; new scripts train_decoder_4u_sfc.sh set in_channels 42 (legacy +12 pattern).
+  This is another uncertainty; verify expected channels from y_context composition before final runs.
+- End-to-end: added training scripts for 4u_sfc without changing default 4u behavior.
+
+Processor/decoder setup uncertainty summary (for external review)
+- Processor (forecast) input y_context is built as concat(ERA5/IC fields + elev(4) + aux_time(5)).
+  Strict derivation gives 24+9=33 channels for 4u and 30+9=39 for 4u_sfc.
+  Legacy scripts use in_channels=35 for 4u, implying +11; mirrored to 41 for 4u_sfc.
+  Unclear if paper includes extra channels (e.g., climatology, masks, or legacy conventions).
+- Decoder (downscaling) input channels: legacy script uses in_channels=36 for 4u (implies +12).
+  Mirrored to 42 for 4u_sfc. Also unclear vs strict +9 derivation.
+- Need to verify paper’s exact processor/decoder input composition and channel counts.
+- Bug note: `models.py` used `torch.ones_like(elev[:, :5, ...])` to size aux_time grids.
+  `elev` has 4 channels (orog, lsm, sin(lat), cos(lat)), so this mismatched aux_time (5 features).
+  Fix: size the aux_time grid using `aux_time_current.shape[1]` instead of `elev` channels.
+- cltorg bug? note: `aardvark/models.py` had `elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])`;
+  temporarily commented to test encoder shape alignment.
+- cltorg bug? note: `aardvark/vit.py` per_var_embedding=False path was inconsistent:
+  MLP outputs 256 channels but PatchEmbed expected `in_channels` (e.g., 277).
+  Fixed by setting PatchEmbed in_channels to 256 and leaving commented original lines.
+- ERA5 NaN note: pressure-level ERA5 fields can contain NaNs at some grid points (not whole timesteps),
+  which poisoned mean/std in `mean_4u_sfc_1.npy`/`std_4u_sfc_1.npy` when using plain sums.
+  Best practice: use NaN-aware stats (`np.nansum` + per-channel valid counts) and optionally
+  fill NaN/Inf in memmaps via `--fill_nan 0.0` in `scripts/prep_era5_truth.py` before training.

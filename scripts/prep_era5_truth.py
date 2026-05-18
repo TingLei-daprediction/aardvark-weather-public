@@ -6,11 +6,13 @@ Inputs:
   - Target grid files: data/grid_lon_lat/era5_x_1.npy and era5_y_1.npy (lon/lat in degrees).
 
 Outputs (per year):
-  - <output_dir>/era5/era5_sfc_1_6_<year>.memmap  (or other mode name via --era5_mode)
+  - <output_dir>/era5/era5_4u_1_6_<year>.memmap  (or other mode name via --era5_mode)
+  - daily option writes: era5_4u_1_1d_<year>.memmap (see --time_freq)
   - <output_dir>/norm_factors/mean_<mode>_1.npy and std_<mode>_1.npy (per-channel mean/std)
 
 Notes:
   - This script assumes 6-hourly data and uses the variables listed via --variables in the given order.
+  - Pressure-level variables can be restricted via --pressure_levels (default: 850,700,500,200).
   - Reindexes each monthly file to the target grid (nearest) after normalizing lon to 0–360 and flipping lat to 90→-90.
   - Channels are stacked as given in --variables; ensure this matches what your training expects.
 """
@@ -27,17 +29,29 @@ import xarray as xr
 def parse_args():
     p = argparse.ArgumentParser(description="Prepare ERA5 memmaps on target grid")
     p.add_argument("--input_dir", required=True, help="Dir with monthly ERA5 NetCDF files")
+    p.add_argument(
+        "--sfc_input_dir",
+        default=None,
+        help="Optional dir with surface NetCDF files (for mixed modes like 4u_sfc)",
+    )
     p.add_argument("--output_dir", required=True, help="Base output dir for memmaps/norms")
     p.add_argument(
         "--era5_mode",
-        default="sfc",
-        help="Mode name for output files (e.g., sfc, 4u, 13u)",
+        default="4u_sfc",
+        help="Mode name for output files (e.g., sfc, 4u, 4u_sfc, 13u)",
     )
     p.add_argument(
         "--variables",
         nargs="+",
         required=True,
         help="Variable names in desired channel order (must match NetCDF names)",
+    )
+    p.add_argument(
+        "--pressure_levels",
+        nargs="+",
+        type=int,
+        default=[850, 700, 500, 200],
+        help="Pressure levels to keep for pressure-level variables (default: 850 700 500 200)",
     )
     p.add_argument(
         "--years",
@@ -47,9 +61,30 @@ def parse_args():
         help="Years to process (e.g., 2007 2008 ...)",
     )
     p.add_argument(
+        "--pattern",
+        default="era5_*_{year}_*.nc",
+        help="Glob pattern for files in input_dir; use {year} placeholder (default: era5_*_{year}_*.nc)",
+    )
+    p.add_argument(
+        "--sfc_pattern",
+        default="era5_*_{year}_*.nc",
+        help="Glob pattern for files in sfc_input_dir; use {year} placeholder (default: era5_*_{year}_*.nc)",
+    )
+    p.add_argument(
         "--grid_dir",
-        default="data/grid_lon_lat",
+        default="../data/grid_lon_lat",
         help="Directory containing era5_x_1.npy and era5_y_1.npy",
+    )
+    p.add_argument(
+        "--time_freq",
+        default="6H",
+        help="Output frequency: 6H or 1D (daily 00 UTC)",
+    )
+    p.add_argument(
+        "--fill_nan",
+        type=float,
+        default=None,
+        help="Optional value to replace NaNs/Inf in output memmaps (e.g. 0.0).",
     )
     return p.parse_args()
 
@@ -72,13 +107,14 @@ def normalize_and_reindex(ds, lon_tgt, lat_tgt):
     # Normalize lon to 0–360 and sort
     lon_name = "lon" if "lon" in ds.coords else "longitude"
     lat_name = "lat" if "lat" in ds.coords else "latitude"
+    time_name = "time" if "time" in ds.coords else "valid_time"
     ds = ds.assign_coords({lon_name: ((ds[lon_name] + 360) % 360)}).sortby(lon_name)
     # Flip lat to 90 -> -90 if needed
     if ds[lat_name][0] < ds[lat_name][-1]:
         ds = ds.reindex({lat_name: list(reversed(ds[lat_name]))})
     # Reindex to target grid (nearest neighbor, no fill)
     ds = ds.reindex({lon_name: lon_tgt, lat_name: lat_tgt}, method="nearest")
-    return ds, lon_name, lat_name
+    return ds, time_name, lon_name, lat_name
 
 
 def write_memmap(year, arr, memmap_path):
@@ -87,69 +123,133 @@ def write_memmap(year, arr, memmap_path):
     del mmap
 
 
+def select_daily_00utc(ds, time_name):
+    if time_name not in ds.coords:
+        return ds
+    time = ds[time_name]
+    if time.dt.hour.size == 0:
+        return ds
+    if int(time.dt.hour.max()) == 0 and int(time.dt.hour.min()) == 0:
+        return ds
+    return ds.where(time.dt.hour == 0, drop=True)
+
+
 def main():
     args = parse_args()
     memmap_dir, norms_dir = ensure_dirs(args.output_dir)
     lon_tgt, lat_tgt = load_target_grid(args.grid_dir)
 
-    # Accumulate for mean/std across all years
+    name_map = {
+        "2m_temperature": "t2m",
+        "2m_dewpoint_temperature": "d2m",
+        "10m_u_component_of_wind": "u10",
+        "10m_v_component_of_wind": "v10",
+        "mean_sea_level_pressure": "msl",
+        "surface_pressure": "sp",
+        "geopotential": "z",
+        "temperature": "t",
+        "relative_humidity": "r",
+        "specific_humidity": "q",
+        "u_component_of_wind": "u",
+        "v_component_of_wind": "v",
+        "vertical_velocity": "w",
+    }
+
+    # Accumulate for mean/std across all years (NaN-aware)
     sum_channels = None
     sumsq_channels = None
-    count = 0
+    count_channels = None
 
     for year in args.years:
-        files = sorted(
-            glob.glob(os.path.join(args.input_dir, f"era5_single_1p5deg_{year}_*.nc"))
-        )
+        glob_pat = args.pattern.format(year=year)
+        files = sorted(glob.glob(os.path.join(args.input_dir, glob_pat)))
         if not files:
             print(f"[WARN] No files for year {year}, skipping.")
             continue
 
         ds = xr.open_mfdataset(files, combine="by_coords")
-        ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+        ds_sfc = None
+        if args.sfc_input_dir:
+            sfc_glob = args.sfc_pattern.format(year=year)
+            sfc_files = sorted(glob.glob(os.path.join(args.sfc_input_dir, sfc_glob)))
+            if sfc_files:
+                ds_sfc = xr.open_mfdataset(sfc_files, combine="by_coords")
+        ds, time_name, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
+        if ds_sfc is not None:
+            ds_sfc, sfc_time, sfc_lon, sfc_lat = normalize_and_reindex(
+                ds_sfc, lon_tgt, lat_tgt
+            )
+            time_name = sfc_time
+        if args.time_freq == "1D":
+            ds = select_daily_00utc(ds, time_name)
+            if ds_sfc is not None:
+                ds_sfc = select_daily_00utc(ds_sfc, time_name)
 
         # Stack variables in the given order, flattening levels (if present) into channels
         channel_arrays = []
         for v in args.variables:
-            if v not in ds.data_vars:
-                raise ValueError(f"Variable {v} not found in dataset for year {year}")
-            da = ds[v]
-            if "level" in da.dims:
-                da = da.transpose("time", "level", lat_name, lon_name)
+            v_in = name_map.get(v, v)
+            da = None
+            if v_in in ds.data_vars:
+                da = ds[v_in]
+            elif ds_sfc is not None and v_in in ds_sfc.data_vars:
+                da = ds_sfc[v_in]
+            else:
+                raise ValueError(
+                    f"Variable {v} (mapped to {v_in}) not found for year {year}"
+                )
+
+            if "pressure_level" in da.dims:
+                levels = [int(x) for x in da["pressure_level"].values]
+                missing = [l for l in args.pressure_levels if l not in levels]
+                if missing:
+                    raise ValueError(
+                        f"Missing pressure levels {missing} for {v_in} in year {year}"
+                    )
+                da = da.sel(pressure_level=args.pressure_levels)
+                da = da.transpose(time_name, "pressure_level", lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, level, lat, lon)
                 # move to (time, level, lon, lat) and treat each level as a channel
                 arr_v = np.transpose(arr_v, (0, 1, 3, 2))
-                # reshape to (time, channels, lon, lat)
-                arr_v = arr_v.reshape(arr_v.shape[0], arr_v.shape[1], arr_v.shape[2], arr_v.shape[3])
             else:
-                da = da.transpose("time", lat_name, lon_name)
+                da = da.transpose(time_name, lat_name, lon_name)
                 arr_v = da.values.astype("float32")  # (time, lat, lon)
                 arr_v = np.transpose(arr_v, (0, 2, 1))  # (time, lon, lat)
-                arr_v = arr_v[:, np.newaxis, ...]      # add channel dim
+                arr_v = arr_v[:, np.newaxis, ...]  # add channel dim
             channel_arrays.append(arr_v)
 
         # Concatenate all channels: resulting shape (time, channels, lon, lat)
         arr = np.concatenate(channel_arrays, axis=1)
 
-        memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_6_{year}.memmap"
+        freq_tag = "6" if args.time_freq == "6H" else "1d"
+        memmap_path = memmap_dir / f"era5_{args.era5_mode}_1_{freq_tag}_{year}.memmap"
         print(f"[INFO] Writing {memmap_path} with shape {arr.shape}")
+        if args.fill_nan is not None:
+            arr = np.nan_to_num(
+                arr,
+                nan=args.fill_nan,
+                posinf=args.fill_nan,
+                neginf=args.fill_nan,
+            )
         write_memmap(year, arr, memmap_path)
 
-        # Update running sums for mean/std (channel-wise)
+        # Update running sums for mean/std (per-channel over time+space)
         if sum_channels is None:
-            sum_channels = np.zeros(arr.shape[1:], dtype=np.float64)
-            sumsq_channels = np.zeros(arr.shape[1:], dtype=np.float64)
-        sum_channels += arr.sum(axis=0)
-        sumsq_channels += np.square(arr, dtype=np.float64).sum(axis=0)
-        count += arr.shape[0]
+            sum_channels = np.zeros((arr.shape[1],), dtype=np.float64)
+            sumsq_channels = np.zeros((arr.shape[1],), dtype=np.float64)
+            count_channels = np.zeros((arr.shape[1],), dtype=np.int64)
+        valid = np.isfinite(arr)
+        sum_channels += np.nansum(arr, axis=(0, 2, 3))
+        sumsq_channels += np.nansum(np.square(arr, dtype=np.float64), axis=(0, 2, 3))
+        count_channels += valid.sum(axis=(0, 2, 3))
 
-    if count == 0:
+    if count_channels is None or count_channels.sum() == 0:
         print("[WARN] No data processed; exiting without norms.")
         return
 
     # Compute mean/std per channel (over time, lon, lat)
-    mean = sum_channels / count
-    var = sumsq_channels / count - np.square(mean)
+    mean = sum_channels / count_channels
+    var = sumsq_channels / count_channels - np.square(mean)
     std = np.sqrt(np.clip(var, 0, None)) + 1e-8
 
     mean_path = norms_dir / f"mean_{args.era5_mode}_1.npy"

@@ -3,8 +3,9 @@
 #SBATCH -J convert_obs 
 #SBATCH -p u1-service          # or any partition with outbound HTTPS allowed
 #SBATCH -n 1
-#SBATCH --mem=18G
-#SBATCH -t 12:00:00
+#SBATCH -N 1
+#SBATCH --mem=0
+#SBATCH -t 24:00:00
 #SBATCH -o convert_obs-dl.%j.out
 #SBATCH -e convert_obs-dl.%j.err
 

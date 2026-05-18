@@ -1,4 +1,4 @@
-name: npw
+name: aardvark-env
 channels:
   - pytorch
   - nvidia
@@ -325,4 +325,3 @@ dependencies:
       - wandb==0.16.4
       - yarl==1.9.4
       - zarr==2.16.1
-prefix: /home/azureuser/miniconda3/envs/npw

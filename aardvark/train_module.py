@@ -29,7 +29,7 @@ sys.path.append("../npw/data")
 torch.set_float32_matmul_precision("medium")
 
 
-def ddp_setup(rank, world_size, master_port):
+def ddp_setup(rank, world_size, master_port, backend):
     """
     Args:
         rank: Unique identifier of each process
@@ -38,8 +38,9 @@ def ddp_setup(rank, world_size, master_port):
 
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = master_port
-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
+    init_process_group(backend=backend, rank=rank, world_size=world_size)
+    if backend == "nccl":
+        torch.cuda.set_device(rank)
 
 
 def start_date(name):
@@ -64,6 +65,44 @@ def end_date(name):
         raise Exception(f"Unrecognised split name {name}")
 
 
+def expected_in_channels_assimilation(
+    amsua_channels,
+    amsub_channels,
+    iasi_channels,
+    ascat_channels,
+    hirs_channels,
+    disable_igra,
+    two_frames,
+    climatology_channels=24,
+):
+    # convDeepSet encoders output density + value per channel (2x).
+    amsua = 2 * amsua_channels
+    amsub = 2 * amsub_channels
+    hirs = 2 * hirs_channels
+    sat = 2 * 2
+    icoads = 2 * 5
+    hadisd = 2 * 4
+    igra = 0 if disable_igra else 2 * 24
+    ascat = ascat_channels
+    iasi = iasi_channels
+
+    obs_total = amsua + amsub + hirs + sat + icoads + hadisd + igra + ascat + iasi
+    aux_total = 4 + climatology_channels + 5  # elev vars + climatology + aux time channels
+    if two_frames:
+        return obs_total * 2 + aux_total
+    return obs_total + aux_total
+
+
+def expected_in_channels_forecast(era5_mode, include_year=False):
+    """
+    Forecast loader y_context = era5/IC fields + elev(4) + time channels.
+    ForecastLoader currently uses 4 time channels (no year).
+    """
+    base = 30 if era5_mode == "4u_sfc" else 24
+    time_ch = 5 if include_year else 4
+    return base + 4 + time_ch
+
+
 def main(rank, world_size, output_dir, args):
     """
     Primary training script for the encoder, processor and decoder modules.
@@ -73,20 +112,37 @@ def main(rank, world_size, output_dir, args):
     lead_time = args.lead_time
     era5_mode = args.era5_mode
     weights_dir = args.weights_dir
-    ddp_setup(rank, world_size, master_port)
+    ddp_setup(rank, world_size, master_port, args.backend)
+#clt
+    if torch.cuda.is_available() :
+        device_name = "cuda"
+        torch.set_float32_matmul_precision(
+            "high"
+        )  # Allows using Tensor Cores on A100s
+    else:
+        device_name = "cpu"
+
 
     # Instantiate loss function
     if args.loss == "lw_rmse":
         lf = WeightedRmseLoss(
             args.res,
+            args.data_path,
+            args.aux_data_path,
             start_ind=args.start_ind,
             end_ind=args.end_ind,
             weight_per_variable=bool(args.weight_per_variable),
         )
     elif args.loss == "lw_rmse_pressure_weighted":
-        lf = PressureWeightedRmseLoss(args.res, era5_mode)
+        lf = PressureWeightedRmseLoss(
+            args.res, era5_mode, args.data_path, args.aux_data_path
+        )
     elif args.loss == "rmse":
-        lf = RmseLoss()
+        lf = RmseLoss(
+            start_ind=0,
+            end_ind=args.end_ind - args.start_ind,
+            debug_nan_checks=bool(args.debug_nan_checks),
+        )
     elif args.loss == "downscaling_rmse":
         lf = DownscalingRmseLoss()
 
@@ -95,37 +151,45 @@ def main(rank, world_size, output_dir, args):
     # Case 1: training encoder
     if args.mode == "assimilation":
         train_dataset = WeatherDatasetAssimilation(
-            device="cuda",
+            device=device_name,
             hadisd_mode="train",
-            start_date="2007-01-02",
-            end_date="2017-12-31",
+            start_date=args.assim_train_start_date,
+            end_date=args.assim_train_end_date,
             lead_time=0,
-            era5_mode="4u",
+            era5_mode=args.era5_mode,
             res=args.res,
             var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
+            disable_igra=bool(args.disable_igra),
+            time_freq=args.time_freq,
         )
         val_dataset = WeatherDatasetAssimilation(
-            device="cuda",
+            device=device_name,
             hadisd_mode="train",
-            start_date="2019-01-01",
-            end_date="2019-12-31",
+            start_date=args.assim_val_start_date,
+            end_date=args.assim_val_end_date,
             lead_time=0,
-            era5_mode="4u",
+            era5_mode=args.era5_mode,
             res=args.res,
             var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
+            disable_igra=bool(args.disable_igra),
+            time_freq=args.time_freq,
         )
 
     # Case 2: training processor
     elif args.mode == "forecast":
         if args.ic == "aardvark":
             train_dataset = FineTuneForecastLoaderNew(
-                device="cuda",
+                device=device_name,
                 mode="train",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -134,9 +198,11 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 random_lt=True,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
             val_dataset = FineTuneForecastLoaderNew(
-                device="cuda",
+                device=device_name,
                 mode="val",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -144,10 +210,12 @@ def main(rank, world_size, output_dir, args):
                 frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
         else:
             train_dataset = ForecastLoader(
-                device="cuda",
+                device=device_name,
                 mode="train",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -156,9 +224,13 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                start_date=args.forecast_train_start_date,
+                end_date=args.forecast_train_end_date,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
             val_dataset = ForecastLoader(
-                device="cuda",
+                device=device_name,
                 mode="val",
                 lead_time=lead_time,
                 era5_mode=era5_mode,
@@ -167,6 +239,10 @@ def main(rank, world_size, output_dir, args):
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
+                start_date=args.forecast_val_start_date,
+                end_date=args.forecast_val_end_date,
+                data_path=args.data_path,
+                aux_data_path=args.aux_data_path,
             )
 
     # Case 3: training decoder
@@ -178,8 +254,12 @@ def main(rank, world_size, output_dir, args):
             lead_time=args.lead_time,
             hadisd_var=args.var,
             mode="train",
-            device="cuda",
+            device=device_name,
             forecast_path=None,
+            era5_mode=args.era5_mode,
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
+            time_freq=args.time_freq,
         )
 
         val_dataset = ForecasterDatasetDownscaling(
@@ -188,8 +268,12 @@ def main(rank, world_size, output_dir, args):
             lead_time=args.lead_time,
             hadisd_var=args.var,
             mode="train",
-            device="cuda",
+            device=device_name,
             forecast_path=None,
+            era5_mode=args.era5_mode,
+            data_path=args.data_path,
+            aux_data_path=args.aux_data_path,
+            time_freq=args.time_freq,
         )
 
         try:
@@ -206,29 +290,99 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
             int_channels=args.int_channels,
-            device="cuda",
+            device=device_name,
             res=args.res,
             decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
+            data_path=args.model_data_path,
         )
     else:
+        amsua_channels = args.amsua_channels
+        if amsua_channels is None:
+            amsua_channels = 11 if args.time_freq != "6H" else 13
+        amsub_channels = args.amsub_channels
+        if amsub_channels is None:
+            amsub_channels = 5 if args.time_freq != "6H" else 12
+        iasi_channels = args.iasi_channels
+        if iasi_channels is None:
+            iasi_channels = 45 if args.time_freq != "6H" else 52
+        ascat_channels = args.ascat_channels
+        if ascat_channels is None:
+            ascat_channels = 15 if args.time_freq != "6H" else 17
+        hirs_channels = args.hirs_channels
+        if hirs_channels is None:
+            hirs_channels = 20 if args.time_freq != "6H" else 26
+        expected_in_channels = expected_in_channels_assimilation(
+            amsua_channels,
+            amsub_channels,
+            iasi_channels,
+            ascat_channels,
+            hirs_channels,
+            disable_igra=bool(args.disable_igra),
+            two_frames=bool(args.two_frames),
+            climatology_channels=getattr(train_dataset, "climatology_channels", 24),
+        )
+        expected_model_in_channels = None
+        if args.mode == "assimilation":
+            expected_model_in_channels = expected_in_channels
+            if args.in_channels is None:
+                args.in_channels = expected_model_in_channels
+            elif args.in_channels != expected_model_in_channels:
+                raise ValueError(
+                    f"in_channels={args.in_channels} does not match expected "
+                    f"{expected_model_in_channels} for current settings"
+                )
+        elif args.mode == "forecast":
+            expected_forecast_in = expected_in_channels_forecast(args.era5_mode)
+            expected_model_in_channels = expected_forecast_in
+            if args.in_channels is None:
+                args.in_channels = expected_model_in_channels
+            elif args.in_channels != expected_model_in_channels:
+                raise ValueError(
+                    f"in_channels={args.in_channels} does not match expected "
+                    f"{expected_model_in_channels} for forecast settings"
+                )
+        if args.mode == "assimilation" and rank == 0:
+            print(
+                "[INFO] assimilation input channels: "
+                f"expected={expected_model_in_channels} "
+                f"configured={args.in_channels} "
+                f"climatology_channels={getattr(train_dataset, 'climatology_channels', 24)} "
+                f"climatology_path={getattr(train_dataset, 'climatology_path', 'unknown')}",
+                flush=True,
+            )
+        model_out_channels = args.out_channels
+        if args.mode != "forecast" or model_out_channels is None:
+            model_out_channels = args.end_ind - args.start_ind
         model = ConvCNPWeather(
             in_channels=args.in_channels,
-            out_channels=args.end_ind - args.start_ind,
+            out_channels=model_out_channels,
             int_channels=args.int_channels,
-            device="cuda",
+            device=device_name,
             res=args.res,
             gnp=bool(0),
             decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
             two_frames=bool(args.two_frames),
+            data_path=args.model_data_path,
+            amsua_channels=amsua_channels,
+            amsub_channels=amsub_channels,
+            hirs_channels=hirs_channels,
+            expected_in_channels=expected_model_in_channels,
+            debug_nan_checks=bool(args.debug_nan_checks),
         )
 
     # Instantiate loaders
     train_sampler = DistributedSampler(train_dataset)
     val_sampler = DistributedSampler(val_dataset)
+
+    print(
+        f"[INFO] train_dataset len={len(train_dataset)} "
+        f"val_dataset len={len(val_dataset)}",
+        flush=True,
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -284,15 +438,40 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--epoch", type=int, default=50)
     parser.add_argument("--master_port", default="12345")
+    parser.add_argument("--backend", default="nccl", help="DDP backend (nccl or gloo)")
+    parser.add_argument("--world_size", type=int, default=None, help="Override world size")
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--lead_time", type=int)
-    parser.add_argument("--era5_mode", default="4u")
+    parser.add_argument(
+        "--era5_mode",
+        default="4u_sfc",
+        choices=["4u", "sfc", "4u_sfc"],
+    )
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument("--res", type=int, default=1)
     parser.add_argument("--frequency", type=int, default=6)
     parser.add_argument("--diff", type=int, default=1)
     parser.add_argument("--start_ind", type=int, default=0)
     parser.add_argument("--end_ind", type=int, default=24)
+    parser.add_argument("--disable_igra", type=int, default=0)
+    parser.add_argument("--time_freq", default="1D")
+    parser.add_argument("--amsua_channels", type=int, default=None)
+    parser.add_argument("--amsub_channels", type=int, default=None)
+    parser.add_argument("--iasi_channels", type=int, default=None)
+    parser.add_argument("--ascat_channels", type=int, default=None)
+    parser.add_argument("--hirs_channels", type=int, default=None)
+    parser.add_argument("--debug_nan_checks", type=int, default=0)
+    parser.add_argument("--assim_train_start_date", default="2007-01-02")
+    parser.add_argument("--assim_train_end_date", default="2017-12-31")
+    parser.add_argument("--assim_val_start_date", default="2019-01-01")
+    parser.add_argument("--assim_val_end_date", default="2019-12-31")
+    parser.add_argument("--forecast_train_start_date", default="2007-01-02")
+    parser.add_argument("--forecast_train_end_date", default="2017-12-31")
+    parser.add_argument("--forecast_val_start_date", default="2019-01-01")
+    parser.add_argument("--forecast_val_end_date", default="2019-12-31")
+    parser.add_argument("--data_path", default="path_to_data/")
+    parser.add_argument("--aux_data_path", default="path_to_auxiliary_data/")
+    parser.add_argument("--model_data_path", default="../data/")
     parser.add_argument("--downscaling_train_start_date", default="1979-01-01")
     parser.add_argument("--downscaling_train_end_date", default="2017-12-31")
     parser.add_argument("--downscaling_context", default="era5")
@@ -311,5 +490,8 @@ if __name__ == "__main__":
     with open(output_dir + "/config.pkl", "wb") as f:
         pickle.dump(vars(args), f)
 
-    world_size = torch.cuda.device_count()
-    mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
+    world_size = args.world_size or torch.cuda.device_count()
+    if args.backend == "gloo" and world_size == 1:
+        main(0, 1, output_dir, args)
+    else:
+        mp.spawn(main, args=[world_size, output_dir, args], nprocs=world_size)
