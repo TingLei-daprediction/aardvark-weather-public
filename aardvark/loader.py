@@ -126,9 +126,12 @@ class WeatherDataset(Dataset):
         self.era5_lonlat = torch.stack([xx, yy])
 
         # Climatology
-        climatology_path = self.data_path + "climatology_data.mmap"
+        climatology_path = self.data_path + "era5/climatology_data.mmap"
+        if not os.path.exists(climatology_path):
+            climatology_path = self.data_path + "climatology_data.mmap"
         self.climatology_shape = get_climatology_shape(climatology_path)
         self.climatology_channels = self.climatology_shape[2]
+        self.climatology_path = climatology_path
         self.climatology = np.memmap(
             climatology_path,
             dtype="float32",

@@ -34,6 +34,7 @@ class ConvCNPWeather(nn.Module):
         amsub_channels=12,
         hirs_channels=26,
         expected_in_channels=None,
+        debug_nan_checks=False,
     ):
 
         super().__init__()
@@ -62,6 +63,7 @@ class ConvCNPWeather(nn.Module):
         self.amsua_channels = amsua_channels
         self.amsub_channels = amsub_channels
         self.hirs_channels = hirs_channels
+        self.debug_nan_checks = debug_nan_checks
 
         N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
         N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
@@ -404,7 +406,7 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
-            if not getattr(self, "_debug_encoding_nans", False):
+            if self.debug_nan_checks and not getattr(self, "_debug_encoding_nans", False):
                 for i, enc in enumerate(encodings):
                     enc_nan = torch.isnan(enc).sum().item()
                     enc_inf = torch.isinf(enc).sum().item()
@@ -432,7 +434,7 @@ class ConvCNPWeather(nn.Module):
                 )
                 raise RuntimeError(f"Encoding spatial mismatch: {spatial}")
             x = torch.cat(encodings, dim=1)
-            if not getattr(self, "_debug_concat_nans", False):
+            if self.debug_nan_checks and not getattr(self, "_debug_concat_nans", False):
                 x_nan = torch.isnan(x).sum().item()
                 x_inf = torch.isinf(x).sum().item()
                 print(
@@ -454,7 +456,7 @@ class ConvCNPWeather(nn.Module):
         else:
             x = nn.functional.interpolate(x, size=(256, 128))
             x = self.decoder_lr(x, film_index=(task["lt"] * 0) + 1)
-        if not getattr(self, "_debug_decoder_nans", False):
+        if self.debug_nan_checks and not getattr(self, "_debug_decoder_nans", False):
             x_nan = torch.isnan(x).sum().item()
             x_inf = torch.isinf(x).sum().item()
             print(

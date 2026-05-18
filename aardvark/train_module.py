@@ -138,7 +138,11 @@ def main(rank, world_size, output_dir, args):
             args.res, era5_mode, args.data_path, args.aux_data_path
         )
     elif args.loss == "rmse":
-        lf = RmseLoss(start_ind=0, end_ind=args.end_ind - args.start_ind)
+        lf = RmseLoss(
+            start_ind=0,
+            end_ind=args.end_ind - args.start_ind,
+            debug_nan_checks=bool(args.debug_nan_checks),
+        )
     elif args.loss == "downscaling_rmse":
         lf = DownscalingRmseLoss()
 
@@ -319,23 +323,35 @@ def main(rank, world_size, output_dir, args):
             two_frames=bool(args.two_frames),
             climatology_channels=getattr(train_dataset, "climatology_channels", 24),
         )
+        expected_model_in_channels = None
         if args.mode == "assimilation":
+            expected_model_in_channels = expected_in_channels
             if args.in_channels is None:
-                args.in_channels = expected_in_channels
-            elif args.in_channels != expected_in_channels:
+                args.in_channels = expected_model_in_channels
+            elif args.in_channels != expected_model_in_channels:
                 raise ValueError(
                     f"in_channels={args.in_channels} does not match expected "
-                    f"{expected_in_channels} for current settings"
+                    f"{expected_model_in_channels} for current settings"
                 )
         elif args.mode == "forecast":
             expected_forecast_in = expected_in_channels_forecast(args.era5_mode)
+            expected_model_in_channels = expected_forecast_in
             if args.in_channels is None:
-                args.in_channels = expected_forecast_in
-            elif args.in_channels != expected_forecast_in:
+                args.in_channels = expected_model_in_channels
+            elif args.in_channels != expected_model_in_channels:
                 raise ValueError(
                     f"in_channels={args.in_channels} does not match expected "
-                    f"{expected_forecast_in} for forecast settings"
+                    f"{expected_model_in_channels} for forecast settings"
                 )
+        if args.mode == "assimilation" and rank == 0:
+            print(
+                "[INFO] assimilation input channels: "
+                f"expected={expected_model_in_channels} "
+                f"configured={args.in_channels} "
+                f"climatology_channels={getattr(train_dataset, 'climatology_channels', 24)} "
+                f"climatology_path={getattr(train_dataset, 'climatology_path', 'unknown')}",
+                flush=True,
+            )
         model_out_channels = args.out_channels
         if args.mode != "forecast" or model_out_channels is None:
             model_out_channels = args.end_ind - args.start_ind
@@ -354,7 +370,8 @@ def main(rank, world_size, output_dir, args):
             amsua_channels=amsua_channels,
             amsub_channels=amsub_channels,
             hirs_channels=hirs_channels,
-            expected_in_channels=expected_in_channels,
+            expected_in_channels=expected_model_in_channels,
+            debug_nan_checks=bool(args.debug_nan_checks),
         )
 
     # Instantiate loaders
@@ -443,6 +460,7 @@ if __name__ == "__main__":
     parser.add_argument("--iasi_channels", type=int, default=None)
     parser.add_argument("--ascat_channels", type=int, default=None)
     parser.add_argument("--hirs_channels", type=int, default=None)
+    parser.add_argument("--debug_nan_checks", type=int, default=0)
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")

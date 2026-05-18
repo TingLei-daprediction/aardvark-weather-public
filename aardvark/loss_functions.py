@@ -8,11 +8,18 @@ class RmseLoss(nn.Module):
     RMSE loss
     """
 
-    def __init__(self, start_ind=0, end_ind=24):
+    def __init__(self, start_ind=0, end_ind=24, debug_nan_checks=False):
 
         super().__init__()
         self.start_ind = start_ind
         self.end_ind = end_ind
+        self.debug_nan_checks = debug_nan_checks
+        if not self.debug_nan_checks:
+            print(
+                "[INFO] RmseLoss NaN diagnostics are disabled by default; "
+                "enable with --debug_nan_checks 1.",
+                flush=True,
+            )
 
     def forward(
         self,
@@ -27,7 +34,8 @@ class RmseLoss(nn.Module):
         squared_diff = ((target.to(output.device) - output) ** 2)[
             ..., self.start_ind : self.end_ind
         ]
-        if not hasattr(self, "_warned_nan_rmse"):
+        if self.debug_nan_checks and not hasattr(self, "_checked_nan_rmse"):
+            self._checked_nan_rmse = True
             valid_counts = (~torch.isnan(squared_diff)).sum(dim=(1, 2, 3))
             if torch.any(valid_counts == 0):
                 batch_idx = torch.where(valid_counts == 0)[0].tolist()
@@ -58,7 +66,6 @@ class RmseLoss(nn.Module):
                     f"output_max={out_max}",
                     flush=True,
                 )
-                self._warned_nan_rmse = True
         return torch.mean(torch.sqrt(torch.nanmean(squared_diff, dim=(1, 2, 3))))
 
 
