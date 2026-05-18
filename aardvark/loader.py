@@ -126,11 +126,14 @@ class WeatherDataset(Dataset):
         self.era5_lonlat = torch.stack([xx, yy])
 
         # Climatology
+        climatology_path = self.data_path + "climatology_data.mmap"
+        self.climatology_shape = get_climatology_shape(climatology_path)
+        self.climatology_channels = self.climatology_shape[2]
         self.climatology = np.memmap(
-            self.data_path + "climatology_data.mmap",
+            climatology_path,
             dtype="float32",
             mode="r",
-            shape=CLIMATOLOGY_SHAPE,
+            shape=self.climatology_shape,
         )
 
         # Setup normalisation factors

@@ -3,6 +3,29 @@ Data is stored in memmaps for access speed. Here we give the shapes required to 
 """
 
 CLIMATOLOGY_SHAPE = (4, 366, 24, 240, 121)
+CLIMATOLOGY_BASE_SHAPE = (4, 366, 240, 121)
+
+
+def get_climatology_shape(path):
+    """
+    Infer climatology_data.mmap shape from file size.
+
+    The original Aardvark setup used 24 upper-air climatology channels. The
+    4u_sfc setup can build 30-channel climatology files. Inferring the channel
+    count prevents opening a 30-channel memmap with a fixed 24-channel stride.
+    """
+
+    import os
+
+    slots, days, x, y = CLIMATOLOGY_BASE_SHAPE
+    nbytes = os.path.getsize(path)
+    denom = slots * days * x * y * 4
+    if nbytes % denom != 0:
+        raise ValueError(
+            f"Climatology file size is not divisible by expected grid size: {path}"
+        )
+    channels = nbytes // denom
+    return (slots, days, channels, x, y)
 
 ICOADS_Y_SHAPE = (33601, 5, 12000)
 ICOADS_X_SHAPE = (33601, 2, 12000)

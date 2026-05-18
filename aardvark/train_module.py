@@ -73,6 +73,7 @@ def expected_in_channels_assimilation(
     hirs_channels,
     disable_igra,
     two_frames,
+    climatology_channels=24,
 ):
     # convDeepSet encoders output density + value per channel (2x).
     amsua = 2 * amsua_channels
@@ -86,7 +87,7 @@ def expected_in_channels_assimilation(
     iasi = iasi_channels
 
     obs_total = amsua + amsub + hirs + sat + icoads + hadisd + igra + ascat + iasi
-    aux_total = 4 + 24 + 5  # elev vars + climatology + aux time channels
+    aux_total = 4 + climatology_channels + 5  # elev vars + climatology + aux time channels
     if two_frames:
         return obs_total * 2 + aux_total
     return obs_total + aux_total
@@ -316,6 +317,7 @@ def main(rank, world_size, output_dir, args):
             hirs_channels,
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
+            climatology_channels=getattr(train_dataset, "climatology_channels", 24),
         )
         if args.mode == "assimilation":
             if args.in_channels is None:
