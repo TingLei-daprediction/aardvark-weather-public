@@ -18,6 +18,7 @@ python "${SCRIPT_DIR}/compute_era5_diff_stats.py" \
   --grid_dir "${GRID_DIR}" \
   --era5_mode "${ERA5_MODE}" \
   --res "${RES}" \
+  --time_freq 1D \
   --years "${YEARS[@]}"
 
 python "${SCRIPT_DIR}/compute_era5_norms.py" \
@@ -26,4 +27,5 @@ python "${SCRIPT_DIR}/compute_era5_norms.py" \
   --grid_dir "${GRID_DIR}" \
   --era5_mode "${ERA5_MODE}" \
   --res "${RES}" \
+  --time_freq 1D \
   --years "${YEARS[@]}"
