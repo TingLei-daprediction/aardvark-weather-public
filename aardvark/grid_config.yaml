@@ -1,0 +1,32 @@
+# Grid configuration for Aardvark (read by grid_config.load_grid_config).
+#
+# Grid A (the data/target grid: nlon, nlat, and the domain extent) is DERIVED from the
+# era5_x/era5_y coordinate files named below -- do NOT put nlon/nlat or extent here, or a
+# stale copy could silently contradict the real grid.
+#
+# Grid B (the inner ViT grid used by the assimilation/encoder path) is a free choice.
+#
+# File names are explicit -- there is no resolution ("res") token. For another domain (e.g.
+# Oklahoma) just point these at that domain's files.
+
+# Coordinate file names.
+grid_files:
+  # Read by the datasets, relative to data_path:
+  loader_x: "era5/era5_x_1.npy"
+  loader_y: "era5/era5_y_1.npy"
+  # Read by the model, relative to model_data_path:
+  model_x: "grid_lon_lat/era5_x_1.npy"
+  model_y: "grid_lon_lat/era5_y_1.npy"
+
+# Other grid/domain-dependent data files. {era5_mode}, {freq}, {year} are substituted at
+# runtime from the run parameters. Defaults reproduce the original names.
+data_files:
+  elev_vars: "era5/elev_vars_1.npy"
+  norm_mean: "norm_factors/mean_{era5_mode}_1.npy"
+  norm_std: "norm_factors/std_{era5_mode}_1.npy"
+  era5_memmap: "era5/era5_{era5_mode}_1_{freq}_{year}.memmap"
+  lat_weights: "lat_weights/weights_lat_1.npy"
+
+# Inner ViT grid (Grid B): must be even and >= data-grid (nlon, nlat).
+int_x: 256
+int_y: 128
