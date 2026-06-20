@@ -8,6 +8,7 @@ from architectures import MLP
 from set_convs import convDeepSet
 from unet_wrap_padding import *
 from vit import *
+from grid_config import model_grid_x_path, model_grid_y_path
 
 sys.path.append("../")
 
@@ -23,7 +24,6 @@ class ConvCNPWeather(nn.Module):
         out_channels,
         int_channels,
         device,
-        res,
         data_path="../data/",
         gnp=False,
         mode="assimilation",
@@ -35,6 +35,9 @@ class ConvCNPWeather(nn.Module):
         hirs_channels=26,
         expected_in_channels=None,
         debug_nan_checks=False,
+        cmd_init_ls=0.001,
+        int_x=256,
+        int_y=128,
     ):
 
         super().__init__()
@@ -54,8 +57,8 @@ class ConvCNPWeather(nn.Module):
         self.out_channels = out_channels
         self.int_channels = int_channels
         self.decoder = decoder
-        self.int_x = 256  # clt_hard-wired internal grid width for assimilation pathway
-        self.int_y = 128  # clt_hard-wired internal grid height for assimilation pathway
+        self.int_x = int_x  # inner ViT grid width (Grid B), configurable
+        self.int_y = int_y  # inner ViT grid height (Grid B), configurable
         self.data_path = data_path
         self.mode = mode
         self.film = film
@@ -64,68 +67,95 @@ class ConvCNPWeather(nn.Module):
         self.amsub_channels = amsub_channels
         self.hirs_channels = hirs_channels
         self.debug_nan_checks = debug_nan_checks
+        self.cmd_init_ls = float(cmd_init_ls)
 
         N_SAT_VARS = 2  # clt_hard-wired number of satellite vars used by encoder_sat
         N_ICOADS_VARS = 5  # clt_hard-wired number of ICOADS vars used by encoder_icoads
         N_HADISD_VARS = 5  # clt_hard-wired number of HadISD vars used by encoder_hadisd
 
-        # Load internal grid longitude-latitude locations
+        # Load data/target grid (Grid A) longitude-latitude locations. These files are the
+        # single source of truth for the data-grid size and extent.
         self.era5_x = (
             torch.from_numpy(
-                np.load(self.data_path + "grid_lon_lat/era5_x_{}.npy".format(res))
+                np.load(model_grid_x_path(self.data_path))
             ).float()
             / 360
         )
         self.era5_y = (
             torch.from_numpy(
-                np.load(self.data_path + "grid_lon_lat/era5_y_{}.npy".format(res))
+                np.load(model_grid_y_path(self.data_path))
             ).float()
             / 360
         )
 
+        # Grid A dimensions, derived from the grid files (not hard-wired).
+        self.nlon = int(self.era5_x.shape[0])
+        self.nlat = int(self.era5_y.shape[0])
+
+        # Observation-aggregation grid (Grid A). Built from the actual grid coordinates so
+        # the extent matches the (possibly regional) domain -- previously hard-wired to the
+        # global linspace(0,360,240)/(-90,90,121), which smears obs across the whole globe
+        # for a regional domain.
+        # Kept on CPU here; forward() moves int_grid to the batch device
+        # (see `self.int_grid = [i.to(task["y_target"].device) ...]`).
         self.int_grid = [
-            (torch.linspace(0, 360, 240) / 360).float().cuda(),  # clt_hard-wired lon grid size
-            (torch.linspace(-90, 90, 121) / 360).float().cuda(),  # clt_hard-wired lat grid size
+            self.era5_x.float(),
+            self.era5_y.float(),
         ]
 
         self.int_grid = [self.int_grid[0].unsqueeze(0), self.int_grid[1].unsqueeze(0)]
 
+        # Validate the configured inner grid (Grid B). Only the assimilation/ViT-assimilation
+        # path upsamples to int_x/int_y, so these constraints apply there only.
+        if self.decoder == "vit_assimilation":
+            if self.int_x % 2 or self.int_y % 2:
+                raise ValueError(
+                    f"[grid] inner grid (int_x={self.int_x}, int_y={self.int_y}) must have "
+                    "even dimensions (odd sizes break stride-2/pooling in the backbone)."
+                )
+            if self.int_x < self.nlon or self.int_y < self.nlat:
+                raise ValueError(
+                    f"[grid] inner grid (int_x={self.int_x}, int_y={self.int_y}) must be >= "
+                    f"data grid (nlon={self.nlon}, nlat={self.nlat}); it should oversample, "
+                    "not undersample, Grid A."
+                )
+
         # Create input setconvs for each data modality
         self.ascat_setconvs = convDeepSet(
-            0.001, "OnToOn", density_channel=True, device=self.device  # clt_hard-wired lengthscale
+            self.cmd_init_ls, "OnToOn", density_channel=True, device=self.device
         )
         self.amsua_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OnToOn", density_channel=True, device=self.device)
             for _ in range(self.amsua_channels)
         ]
         self.amsub_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OnToOn", density_channel=True, device=self.device)
             for _ in range(self.amsub_channels)
         ]
         self.hirs_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OnToOn", density_channel=True, device=self.device)
             for _ in range(self.hirs_channels)
         ]
 
         self.sat_setconvs = [
-            convDeepSet(0.001, "OnToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OnToOn", density_channel=True, device=self.device)
             for _ in range(N_SAT_VARS)
         ]
         self.hadisd_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OffToOn", density_channel=True, device=self.device)
             for _ in range(N_HADISD_VARS)
         ]
         self.icoads_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OffToOn", density_channel=True, device=self.device)
             for _ in range(N_ICOADS_VARS)
         ]
         self.igra_setconvs = [
-            convDeepSet(0.001, "OffToOn", density_channel=True, device=self.device)  # clt_hard-wired lengthscale
+            convDeepSet(self.cmd_init_ls, "OffToOn", density_channel=True, device=self.device)
             for _ in range(24)
         ]
 
         self.sc_out = convDeepSet(
-            0.001, "OnToOff", density_channel=False, device=self.device  # clt_hard-wired lengthscale
+            self.cmd_init_ls, "OnToOff", density_channel=False, device=self.device
         )
 
         # Instantiate the decoder. Here decoder refers to decoder in a convCNP (i.e the ViT backbone)
@@ -137,7 +167,7 @@ class ConvCNPWeather(nn.Module):
                 depth=16,  # clt_hard-wired ViT depth
                 patch_size=5,  # clt_hard-wired ViT patch size
                 per_var_embedding=True,
-                img_size=[240, 121],  # clt_hard-wired image size (matches int_grid)
+                img_size=[self.nlon, self.nlat],  # data/target grid (Grid A)
             )
 
         elif self.decoder == "vit_assimilation":
@@ -148,7 +178,7 @@ class ConvCNPWeather(nn.Module):
                 depth=8,  # clt_hard-wired ViT depth
                 patch_size=3,  # clt_hard-wired ViT patch size
                 per_var_embedding=False,
-                img_size=[256, 128],  # clt_hard-wired image size for assimilation mode
+                img_size=[self.int_x, self.int_y],  # inner ViT grid (Grid B)
             )
 
         self.mlp = MLP(
@@ -306,7 +336,7 @@ class ConvCNPWeather(nn.Module):
             torch.isnan(task["ascat_{}".format(prefix)])
         ] = 0
         e = nn.functional.interpolate(
-            task["ascat_{}".format(prefix)].permute(0, 3, 1, 2), size=(240, 121)
+            task["ascat_{}".format(prefix)].permute(0, 3, 1, 2), size=(self.nlon, self.nlat)
         )
         e = torch.flip(e, dims=[-1])
         return e
@@ -318,7 +348,7 @@ class ConvCNPWeather(nn.Module):
 
         task["iasi_{}".format(prefix)][torch.isnan(task["iasi_{}".format(prefix)])] = 0
         e = nn.functional.interpolate(
-            task["iasi_{}".format(prefix)].permute(0, 3, 1, 2), size=(240, 121)
+            task["iasi_{}".format(prefix)].permute(0, 3, 1, 2), size=(self.nlon, self.nlat)
         )
         e = torch.flip(e, dims=[-1])
         return e
@@ -454,7 +484,7 @@ class ConvCNPWeather(nn.Module):
             x = self.decoder_lr(x, lead_times=task["lt"])
             x = x.permute(0, 3, 1, 2)
         else:
-            x = nn.functional.interpolate(x, size=(256, 128))
+            x = nn.functional.interpolate(x, size=(self.int_x, self.int_y))
             x = self.decoder_lr(x, film_index=(task["lt"] * 0) + 1)
         if self.debug_nan_checks and not getattr(self, "_debug_decoder_nans", False):
             x_nan = torch.isnan(x).sum().item()
@@ -470,11 +500,11 @@ class ConvCNPWeather(nn.Module):
         if np.logical_and(
             self.mode == "assimilation", self.decoder == "vit_assimilation"
         ):
-            x = nn.functional.interpolate(x.permute(0, 3, 1, 2), size=(240, 121))
+            x = nn.functional.interpolate(x.permute(0, 3, 1, 2), size=(self.nlon, self.nlat))
             return x.permute(0, 3, 2, 1)
 
         elif self.mode == "forecast":
-            x = nn.functional.interpolate(x, size=(240, 121)).permute(0, 2, 3, 1)
+            x = nn.functional.interpolate(x, size=(self.nlon, self.nlat)).permute(0, 2, 3, 1)
             return x.permute(0, 2, 1, 3)
 
         return x

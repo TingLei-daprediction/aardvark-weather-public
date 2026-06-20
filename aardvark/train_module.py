@@ -9,6 +9,7 @@ import sys
 import pickle
 import argparse
 
+import numpy as np
 import torch
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -23,6 +24,12 @@ from misc_downscaling_functionality import ConvCNPWeatherOnToOff, DownscalingRms
 from loader import *
 from models import *
 from unet_wrap_padding import *
+from grid_config import (
+    load_grid_config,
+    set_active_config,
+    DEFAULT_CONFIG_PATH,
+    assert_grid_files_consistent,
+)
 
 
 sys.path.append("../npw/data")
@@ -113,6 +120,16 @@ def main(rank, world_size, output_dir, args):
     era5_mode = args.era5_mode
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
+
+    # Install the grid config (era5_x/era5_y file names, inner ViT grid) for this process,
+    # before any dataset or model is built. int_x/int_y come from the YAML unless overridden
+    # on the CLI.
+    grid_cfg = load_grid_config(args.grid_config)
+    set_active_config(grid_cfg)
+    if args.int_x is None:
+        args.int_x = grid_cfg["int_x"]
+    if args.int_y is None:
+        args.int_y = grid_cfg["int_y"]
 #clt
     if torch.cuda.is_available() :
         device_name = "cuda"
@@ -126,7 +143,6 @@ def main(rank, world_size, output_dir, args):
     # Instantiate loss function
     if args.loss == "lw_rmse":
         lf = WeightedRmseLoss(
-            args.res,
             args.data_path,
             args.aux_data_path,
             start_ind=args.start_ind,
@@ -135,7 +151,7 @@ def main(rank, world_size, output_dir, args):
         )
     elif args.loss == "lw_rmse_pressure_weighted":
         lf = PressureWeightedRmseLoss(
-            args.res, era5_mode, args.data_path, args.aux_data_path
+            era5_mode, args.data_path, args.aux_data_path
         )
     elif args.loss == "rmse":
         lf = RmseLoss(
@@ -156,9 +172,7 @@ def main(rank, world_size, output_dir, args):
             start_date=args.assim_train_start_date,
             end_date=args.assim_train_end_date,
             lead_time=0,
-            era5_mode=args.era5_mode,
-            res=args.res,
-            var_start=args.start_ind,
+            era5_mode=args.era5_mode,            var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
@@ -173,9 +187,7 @@ def main(rank, world_size, output_dir, args):
             start_date=args.assim_val_start_date,
             end_date=args.assim_val_end_date,
             lead_time=0,
-            era5_mode=args.era5_mode,
-            res=args.res,
-            var_start=args.start_ind,
+            era5_mode=args.era5_mode,            var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
@@ -192,9 +204,7 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="train",
                 lead_time=lead_time,
-                era5_mode=era5_mode,
-                res=args.res,
-                frequency=args.frequency,
+                era5_mode=era5_mode,                frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 random_lt=True,
@@ -205,9 +215,7 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="val",
                 lead_time=lead_time,
-                era5_mode=era5_mode,
-                res=args.res,
-                frequency=args.frequency,
+                era5_mode=era5_mode,                frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 data_path=args.data_path,
@@ -218,9 +226,7 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="train",
                 lead_time=lead_time,
-                era5_mode=era5_mode,
-                res=args.res,
-                frequency=args.frequency,
+                era5_mode=era5_mode,                frequency=args.frequency,
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
@@ -233,9 +239,7 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="val",
                 lead_time=lead_time,
-                era5_mode=era5_mode,
-                res=args.res,
-                frequency=args.frequency,
+                era5_mode=era5_mode,                frequency=args.frequency,
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
@@ -290,13 +294,14 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
             int_channels=args.int_channels,
-            device=device_name,
-            res=args.res,
-            decoder=args.decoder,
+            device=device_name,            decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
             data_path=args.model_data_path,
+            cmd_init_ls=args.cmd_init_ls,
         )
+        # Cross-check: model vs dataset grid files describe the same grid (shape + values).
+        assert_grid_files_consistent(args.model_data_path, args.data_path)
     else:
         amsua_channels = args.amsua_channels
         if amsua_channels is None:
@@ -359,9 +364,7 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=model_out_channels,
             int_channels=args.int_channels,
-            device=device_name,
-            res=args.res,
-            gnp=bool(0),
+            device=device_name,            gnp=bool(0),
             decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
@@ -372,7 +375,14 @@ def main(rank, world_size, output_dir, args):
             hirs_channels=hirs_channels,
             expected_in_channels=expected_model_in_channels,
             debug_nan_checks=bool(args.debug_nan_checks),
+            cmd_init_ls=args.cmd_init_ls,
+            int_x=args.int_x,
+            int_y=args.int_y,
         )
+
+        # Cross-check: the model's grid files (model_data_path) and the dataset's grid files
+        # (data_path) must describe the same data grid -- shape and actual coordinate values.
+        assert_grid_files_consistent(args.model_data_path, args.data_path)
 
     # Instantiate loaders
     train_sampler = DistributedSampler(train_dataset)
@@ -448,7 +458,23 @@ if __name__ == "__main__":
         choices=["4u", "sfc", "4u_sfc"],
     )
     parser.add_argument("--weight_decay", type=float, default=1e-6)
-    parser.add_argument("--res", type=int, default=1)
+    parser.add_argument(
+        "--grid_config",
+        default=DEFAULT_CONFIG_PATH,
+        help="Path to the grid-config YAML (era5_x/era5_y file names, int_x/int_y).",
+    )
+    parser.add_argument(
+        "--int_x",
+        type=int,
+        default=None,
+        help="Inner ViT grid width (Grid B); overrides grid_config. Even and >= nlon.",
+    )
+    parser.add_argument(
+        "--int_y",
+        type=int,
+        default=None,
+        help="Inner ViT grid height (Grid B); overrides grid_config. Even and >= nlat.",
+    )
     parser.add_argument("--frequency", type=int, default=6)
     parser.add_argument("--diff", type=int, default=1)
     parser.add_argument("--start_ind", type=int, default=0)
@@ -461,6 +487,12 @@ if __name__ == "__main__":
     parser.add_argument("--ascat_channels", type=int, default=None)
     parser.add_argument("--hirs_channels", type=int, default=None)
     parser.add_argument("--debug_nan_checks", type=int, default=0)
+    parser.add_argument(
+        "--cmd_init_ls",
+        type=float,
+        default=0.001,
+        help="Initial learnable ConvDeepSet length scale in normalized lat/lon units.",
+    )
     parser.add_argument("--assim_train_start_date", default="2007-01-02")
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")

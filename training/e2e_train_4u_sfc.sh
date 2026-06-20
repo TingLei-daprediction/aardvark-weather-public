@@ -11,7 +11,6 @@ python3 ../aardvark/e2e_train.py \
     --se_model_path PATH_TO_ENCODER_MODEL \
     --forecast_model_path PATH_TO_FORECAST_MODEL \
     --weight_decay 1e-6 \
-    --res 1 \
     --frequency 6 \
     --region global \
     --var tas

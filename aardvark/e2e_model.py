@@ -103,12 +103,11 @@ class ConvCNPWeatherE2E(nn.Module):
             in_channels=forecast_config["in_channels"],
             out_channels=forecast_config["out_channels"],
             int_channels=forecast_config["int_channels"],
-            device="cuda",
-            res=forecast_config["res"],
-            gnp=bool(0),
+            device="cuda",            gnp=bool(0),
             decoder=forecast_config["decoder"],
             mode=forecast_config["mode"],
             film=bool(0),
+            cmd_init_ls=forecast_config.get("cmd_init_ls", 0.001),
         )
 
         best_epoch = np.argmin(np.load("{}/losses_0.npy".format(se_model_path)))
@@ -133,12 +132,11 @@ class ConvCNPWeatherE2E(nn.Module):
             in_channels=forecast_config["in_channels"],
             out_channels=forecast_config["out_channels"],
             int_channels=forecast_config["int_channels"],
-            device="cuda",
-            res=forecast_config["res"],
-            gnp=bool(0),
+            device="cuda",            gnp=bool(0),
             decoder=forecast_config["decoder"],
             mode=forecast_config["mode"],
             film=False,
+            cmd_init_ls=forecast_config.get("cmd_init_ls", 0.001),
         )
         state_dict = torch.load(
             f"{forecast_model_path}/forecast_{lead_time}/epoch_0",
@@ -162,10 +160,10 @@ class ConvCNPWeatherE2E(nn.Module):
             out_channels=config["out_channels"],
             int_channels=config["int_channels"],
             device="cuda",
-            res=config["res"],
             decoder=config["decoder"],
             mode=config["mode"],
             film=False,
+            cmd_init_ls=config.get("cmd_init_ls", 0.001),
         )
 
         best_epoch = np.argmin(

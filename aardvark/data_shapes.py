@@ -6,18 +6,25 @@ CLIMATOLOGY_SHAPE = (4, 366, 24, 240, 121)
 CLIMATOLOGY_BASE_SHAPE = (4, 366, 240, 121)
 
 
-def get_climatology_shape(path):
+def get_climatology_shape(path, nlon=None, nlat=None):
     """
     Infer climatology_data.mmap shape from file size.
 
     The original Aardvark setup used 24 upper-air climatology channels. The
     4u_sfc setup can build 30-channel climatology files. Inferring the channel
     count prevents opening a 30-channel memmap with a fixed 24-channel stride.
+
+    ``nlon``/``nlat`` override the spatial grid size (Grid A) for non-global
+    domains; they default to the global ``CLIMATOLOGY_BASE_SHAPE``.
     """
 
     import os
 
     slots, days, x, y = CLIMATOLOGY_BASE_SHAPE
+    if nlon is not None:
+        x = nlon
+    if nlat is not None:
+        y = nlat
     nbytes = os.path.getsize(path)
     denom = slots * days * x * y * 4
     if nbytes % denom != 0:

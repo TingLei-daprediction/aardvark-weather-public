@@ -9,6 +9,62 @@ from torch.utils.data import Dataset
 
 from loader_utils_new import *
 from data_shapes import *
+from grid_config import (
+    loader_grid_x_path,
+    loader_grid_y_path,
+    elev_vars_path,
+    norm_mean_path,
+    norm_std_path,
+    era5_memmap_path,
+)
+
+
+def grid_dims_from_files(data_path):
+    """Return (nlon, nlat) for the data/target grid (Grid A) from the canonical grid files.
+
+    The era5_x file holds the longitudes (nlon) and era5_y the latitudes (nlat); their names
+    come from the active grid config (see ``grid_config``). These files are the single source
+    of truth for the data-grid size; every other grid-dependent array is validated against
+    them via :func:`assert_grid_match`.
+    """
+    lon = np.load(loader_grid_x_path(data_path), mmap_mode="r")
+    lat = np.load(loader_grid_y_path(data_path), mmap_mode="r")
+    return int(np.asarray(lon).shape[0]), int(np.asarray(lat).shape[0])
+
+
+def assert_grid_match(name, spatial_dims, expected):
+    """Assert a 2-D spatial shape matches an explicit expected (orientation-sensitive) order.
+
+    Loaders store grid fields in differing axis orders (e.g. raw ``elev_vars`` is
+    (channels, nlat, nlon) but post-loader tensors are (channels, nlon, nlat)). Pass the
+    expected ``(d0, d1)`` so a swapped lat/lon array is caught, not hidden.
+    """
+    dims = tuple(int(d) for d in spatial_dims)
+    exp = tuple(int(e) for e in expected)
+    if dims != exp:
+        raise ValueError(
+            f"[grid] {name} spatial dims {dims} do not match expected {exp}; "
+            "check the era5_x/era5_y grid files and this array's lat/lon axis order."
+        )
+
+
+def assert_memmap_size(name, path, shape, itemsize=4):
+    """Assert an on-grid memmap file's byte size matches the expected shape exactly.
+
+    ``np.memmap(mode="r", shape=...)`` raises only when the file is *smaller* than required;
+    a *larger* file is silently mapped to a prefix, so a wrong-resolution (e.g. non-OK-domain)
+    observation file would otherwise go undetected. This catches size/resolution mismatches.
+    Note: it cannot detect a same-byte-count lat/lon axis swap (the memmap stores no
+    coordinates); orientation is enforced by convention via the shape we pass.
+    """
+    expected = int(np.prod(shape)) * itemsize
+    actual = os.path.getsize(path)
+    if actual != expected:
+        raise ValueError(
+            f"[grid] {name} file {path} size {actual} bytes does not match expected "
+            f"{expected} bytes for shape {tuple(shape)} (itemsize {itemsize}); the file's "
+            "grid/resolution likely differs from era5_x/era5_y."
+        )
 
 
 class WeatherDataset(Dataset):
@@ -24,7 +80,6 @@ class WeatherDataset(Dataset):
         end_date,
         lead_time,
         era5_mode="train",
-        res=1,
         filter_dates=None,
         diff=None,
         data_path=None,
@@ -44,12 +99,16 @@ class WeatherDataset(Dataset):
         self.end_date = end_date
         self.lead_time = lead_time
         self.era5_mode = era5_mode
-        self.res = res
         self.filter_dates = filter_dates
         self.diff = diff
         self.disable_igra = disable_igra
         self.time_freq = time_freq
         self.offsets = build_offsets(self.time_freq)
+
+        # Data/target grid (Grid A) size, derived from the canonical grid files. Set before
+        # any modality loading so the observation/ERA5 memmap shapes and the elevation/grid
+        # assertions can all be validated against it.
+        self.nlon, self.nlat = grid_dims_from_files(self.data_path)
 
         # Date indexing
         self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)
@@ -108,20 +167,29 @@ class WeatherDataset(Dataset):
         # Internal grid to longitude latitude correspondence
         self.era5_x = [
             self.to_tensor(
-                np.load(self.data_path + "era5/era5_x_{}.npy".format(self.res))
+                np.load(loader_grid_x_path(self.data_path))
             )
             / LATLON_SCALE_FACTOR,
             self.to_tensor(
-                np.load(self.data_path + "era5/era5_y_{}.npy".format(self.res))
+                np.load(loader_grid_y_path(self.data_path))
             )
             / LATLON_SCALE_FACTOR,
         ]
-
-        # Orography
-        self.era5_elev = self.to_tensor(
-            np.load(self.data_path + "era5/elev_vars_{}.npy".format(self.res))
+        assert_grid_match(
+            "era5_x/era5_y",
+            (self.era5_x[0].shape[0], self.era5_x[1].shape[0]),
+            (self.nlon, self.nlat),
         )
+
+        # Orography. Raw file convention is (channels, nlat, nlon); after permute/flip the
+        # loader tensor is (channels, nlon, nlat).
+        raw_elev = np.load(elev_vars_path(self.data_path))
+        assert_grid_match("elev_vars (raw)", raw_elev.shape[1:], (self.nlat, self.nlon))
+        self.era5_elev = self.to_tensor(raw_elev)
         self.era5_elev = torch.flip(self.era5_elev.permute(0, 2, 1), [-1])
+        assert_grid_match(
+            "era5_elev (loader)", self.era5_elev.shape[1:], (self.nlon, self.nlat)
+        )
         xx, yy = torch.meshgrid(self.era5_x[0], self.era5_x[1])
         self.era5_lonlat = torch.stack([xx, yy])
 
@@ -129,7 +197,9 @@ class WeatherDataset(Dataset):
         climatology_path = self.data_path + "era5/climatology_data.mmap"
         if not os.path.exists(climatology_path):
             climatology_path = self.data_path + "climatology_data.mmap"
-        self.climatology_shape = get_climatology_shape(climatology_path)
+        self.climatology_shape = get_climatology_shape(
+            climatology_path, self.nlon, self.nlat
+        )
         self.climatology_channels = self.climatology_shape[2]
         self.climatology_path = climatology_path
         self.climatology = np.memmap(
@@ -152,12 +222,10 @@ class WeatherDataset(Dataset):
             ]
         else:
             self.means = np.load(
-                self.aux_data_path
-                + "norm_factors/mean_{}_{}.npy".format(self.era5_mode, self.res)
+                norm_mean_path(self.aux_data_path, self.era5_mode)
             )[:, np.newaxis, np.newaxis, ...]
             self.stds = np.load(
-                self.aux_data_path
-                + "norm_factors/std_{}_{}.npy".format(self.era5_mode, self.res)
+                norm_std_path(self.aux_data_path, self.era5_mode)
             )[:, np.newaxis, np.newaxis, ...]
 
     def _infer_time_dim(self, path, fixed_shape):
@@ -170,8 +238,8 @@ class WeatherDataset(Dataset):
         return file_bytes // denom
 
     def _era5_grid_axes(self):
-        lon = np.load(self.data_path + f"era5/era5_x_{self.res}.npy")
-        lat = np.load(self.data_path + f"era5/era5_y_{self.res}.npy")
+        lon = np.load(loader_grid_x_path(self.data_path))
+        lat = np.load(loader_grid_y_path(self.data_path))
         return lon.astype(np.float32), lat.astype(np.float32)
 
     def load_icoads(self):
@@ -275,7 +343,12 @@ class WeatherDataset(Dataset):
         amsua_path = self.data_path + "amsua/2007_2021_amsua.mmap"
         amsua_shape = list(AMSUA_Y_SHAPE)
         if self.time_freq != "6H":
+            # Daily gridded obs on Grid A; AMSU-A layout is (time, nlat, nlon, channels).
             amsua_shape = list(AMSUA_Y_SHAPE_1D)
+            amsua_shape[1] = self.nlat
+            amsua_shape[2] = self.nlon
+        if self.time_freq != "6H":
+            assert_memmap_size("amsua", amsua_path, amsua_shape)
         self.amsua_y = np.memmap(
             amsua_path,
             dtype="float32",
@@ -312,7 +385,12 @@ class WeatherDataset(Dataset):
         amsub_path = self.data_path + "amsub_mhs/2007_2021_amsub.mmap"
         amsub_shape = list(AMSUB_Y_SHAPE)
         if self.time_freq != "6H":
+            # Daily gridded obs on Grid A; AMSU-B layout is (time, nlon, nlat, channels).
             amsub_shape = list(AMSUB_Y_SHAPE_1D)
+            amsub_shape[1] = self.nlon
+            amsub_shape[2] = self.nlat
+        if self.time_freq != "6H":
+            assert_memmap_size("amsub", amsub_path, amsub_shape)
         self.amsub_y = np.memmap(
             amsub_path,
             dtype="float32",
@@ -349,7 +427,12 @@ class WeatherDataset(Dataset):
         ascat_path = self.data_path + "ascat/2007_2021_ascat.mmap"
         ascat_shape = list(ASCAT_Y_SHAPE)
         if self.time_freq != "6H":
+            # Daily gridded obs on Grid A; ASCAT layout is (time, nlon, nlat, channels).
             ascat_shape = list(ASCAT_Y_SHAPE_1D)
+            ascat_shape[1] = self.nlon
+            ascat_shape[2] = self.nlat
+        if self.time_freq != "6H":
+            assert_memmap_size("ascat", ascat_path, ascat_shape)
         self.ascat_y = np.memmap(
             ascat_path,
             dtype="float32",
@@ -386,7 +469,12 @@ class WeatherDataset(Dataset):
         hirs_path = self.data_path + "hirs/2007_2021_hirs.mmap"
         hirs_shape = list(HIRS_Y_SHAPE)
         if self.time_freq != "6H":
+            # Daily gridded obs on Grid A; HIRS layout is (time, nlon, nlat, channels).
             hirs_shape = list(HIRS_Y_SHAPE_1D)
+            hirs_shape[1] = self.nlon
+            hirs_shape[2] = self.nlat
+        if self.time_freq != "6H":
+            assert_memmap_size("hirs", hirs_path, hirs_shape)
         self.hirs_y = np.memmap(
             hirs_path,
             dtype="float32",
@@ -453,7 +541,12 @@ class WeatherDataset(Dataset):
         iasi_path = self.data_path + "2007_2021_iasi_subset.mmap"
         iasi_shape = list(IASI_Y_SHAPE)
         if self.time_freq != "6H":
+            # Daily gridded obs on Grid A; IASI layout is (time, nlon, nlat, channels).
             iasi_shape = list(IASI_Y_SHAPE_1D)
+            iasi_shape[1] = self.nlon
+            iasi_shape[2] = self.nlat
+        if self.time_freq != "6H":
+            assert_memmap_size("iasi", iasi_path, iasi_shape)
         self.iasi = np.memmap(
             iasi_path,
             dtype="float32",
@@ -564,15 +657,11 @@ class WeatherDataset(Dataset):
         else:
             levels = 24
 
-        if self.res == 1:
-            x = 240
-            y = 121
-        elif self.res == 5:
-            x = 64
-            y = 32
+        x = self.nlon
+        y = self.nlat
         freq_tag = "6" if self.time_freq == "6H" else "1d"
-        memmap_path = self.data_path + "/era5/era5_{}_{}_{}_{}.memmap".format(
-            self.era5_mode, self.res, freq_tag, year
+        memmap_path = era5_memmap_path(
+            self.data_path, self.era5_mode, freq_tag, year
         )
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
@@ -644,7 +733,6 @@ class WeatherDatasetAssimilation(WeatherDataset):
         end_date,
         lead_time,
         era5_mode="sfc",
-        res=1,
         filter_dates=None,
         var_start=0,
         var_end=24,
@@ -663,7 +751,6 @@ class WeatherDatasetAssimilation(WeatherDataset):
             end_date,
             lead_time,
             era5_mode,
-            res=res,
             filter_dates=filter_dates,
             diff=diff,
             data_path=data_path,
@@ -1063,6 +1150,8 @@ class AardvarkICDataset(Dataset):
         self.time_freq = time_freq
         offset_factor = 4 if self.time_freq == "6H" else 1
         channels = 30 if self.era5_mode == "4u_sfc" else 24
+        # Encoder-prediction memmaps are stored on the data/target grid (Grid A).
+        self.nlon, self.nlat = grid_dims_from_files(self.data_path)
 
         if lead_time == 0:
             # If leadtime is 0 load the output of the encoder
@@ -1082,7 +1171,7 @@ class AardvarkICDataset(Dataset):
                 self.encoder_predictions_path + ic_fname,
                 dtype="float32",
                 mode="r",
-                shape=(len(dates), 121, 240, channels),  # shape of the output
+                shape=(len(dates), self.nlat, self.nlon, channels),  # shape of the output
             )
         else:
             # if leadtime >0 load the forecast generated from the encoder prediction
@@ -1100,7 +1189,7 @@ class AardvarkICDataset(Dataset):
             dates = pd.date_range(start_date, end_date, freq=self.time_freq)[
                 (lead_time) * offset_factor :
             ]
-            ic_shape = (len(dates), 121, 240, channels)
+            ic_shape = (len(dates), self.nlat, self.nlon, channels)
 
             self.data = np.memmap(
                 self.data_path + "forecast_finetune/" + ic_fname,
@@ -1112,12 +1201,8 @@ class AardvarkICDataset(Dataset):
         self.device = device
 
         # Normalisation
-        mean_factors_path = (
-            self.aux_data_path + f"norm_factors/mean_{self.era5_mode}_1.npy"
-        )
-        std_factors_path = (
-            self.aux_data_path + f"norm_factors/std_{self.era5_mode}_1.npy"
-        )
+        mean_factors_path = norm_mean_path(self.aux_data_path, self.era5_mode)
+        std_factors_path = norm_std_path(self.aux_data_path, self.era5_mode)
         self.means = np.load(mean_factors_path)[:, np.newaxis, np.newaxis, ...]
         self.stds = np.load(std_factors_path)[:, np.newaxis, np.newaxis, ...]
 
@@ -1142,7 +1227,6 @@ class WeatherDatasetDownscaling(Dataset):
         end_date,
         context_mode,
         era5_mode="sfc",
-        res=1,
         hadisd_var="tas",
         lead_time=1,
         data_path=None,
@@ -1166,7 +1250,6 @@ class WeatherDatasetDownscaling(Dataset):
         self.start_date = start_date
         self.end_date = end_date
         self.era5_mode = era5_mode
-        self.res = res
         self.context_mode = context_mode
         self.time_freq = time_freq
         self.offset_factor = 4 if self.time_freq == "6H" else 1
@@ -1180,24 +1263,27 @@ class WeatherDatasetDownscaling(Dataset):
             for year in range(int(start_date[:4]), int(end_date[:4]) + 1)
         ]
 
-        raw_era5_lon = np.load(self.data_path + f"era5/era5_x_{res}.npy")
-        raw_era5_lat = np.load(self.data_path + f"era5/era5_y_{res}.npy")
+        raw_era5_lon = np.load(loader_grid_x_path(self.data_path))
+        raw_era5_lat = np.load(loader_grid_y_path(self.data_path))
         self.era5_x = [
             self.to_tensor(raw_era5_lon) / LATLON_SCALE_FACTOR,
             self.to_tensor(raw_era5_lat) / LATLON_SCALE_FACTOR,
         ]
+        self.nlon = self.era5_x[0].shape[0]
+        self.nlat = self.era5_x[1].shape[0]
 
-        # Load orography
-        elev_path = self.data_path + f"era5/elev_vars_{res}.npy"
-        self.era5_elev = self.to_tensor(np.load(elev_path)).permute(0, 2, 1)
+        # Load orography. Raw file is (channels, nlat, nlon); post-permute (channels, nlon, nlat).
+        elev_path = elev_vars_path(self.data_path)
+        raw_elev = np.load(elev_path)
+        assert_grid_match("elev_vars (raw)", raw_elev.shape[1:], (self.nlat, self.nlon))
+        self.era5_elev = self.to_tensor(raw_elev).permute(0, 2, 1)
+        assert_grid_match(
+            "era5_elev (loader)", self.era5_elev.shape[1:], (self.nlon, self.nlat)
+        )
 
         # Normalisation
-        mean_factors_path = (
-            self.aux_data_path + f"norm_factors/mean_{era5_mode}_{res}.npy"
-        )
-        std_factors_path = (
-            self.aux_data_path + f"norm_factors/std_{era5_mode}_{res}.npy"
-        )
+        mean_factors_path = norm_mean_path(self.aux_data_path, era5_mode)
+        std_factors_path = norm_std_path(self.aux_data_path, era5_mode)
         self.means = np.load(mean_factors_path)[:, np.newaxis, np.newaxis, ...]
         self.stds = np.load(std_factors_path)[:, np.newaxis, np.newaxis, ...]
 
@@ -1245,15 +1331,11 @@ class WeatherDatasetDownscaling(Dataset):
         else:
             levels = 24
 
-        if self.res == 1:
-            x = 240
-            y = 121
-        elif self.res == 5:
-            x = 64
-            y = 32
+        x = self.nlon
+        y = self.nlat
         freq_tag = "6" if self.time_freq == "6H" else "1d"
-        memmap_path = self.data_path + "era5/era5_{}_{}_{}_{}.memmap".format(
-            self.era5_mode, self.res, freq_tag, year
+        memmap_path = era5_memmap_path(
+            self.data_path, self.era5_mode, freq_tag, year
         )
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
@@ -1430,23 +1512,29 @@ class ForecasterDatasetDownscaling(Dataset):
 
         # Normalisation
         self.means = np.load(
-            self.aux_data_path + f"norm_factors/mean_{self.era5_mode}_1.npy"
+            norm_mean_path(self.aux_data_path, self.era5_mode)
         )
         self.stds = np.load(
-            self.aux_data_path + f"norm_factors/std_{self.era5_mode}_1.npy"
+            norm_std_path(self.aux_data_path, self.era5_mode)
         )
 
         # Load auxiliary data
         self.load_npy_file()
-        res = "1"
-        raw_era5_lon = np.load(self.data_path + f"era5/era5_x_{res}.npy")
-        raw_era5_lat = np.load(self.data_path + f"era5/era5_y_{res}.npy")
+        raw_era5_lon = np.load(loader_grid_x_path(self.data_path))
+        raw_era5_lat = np.load(loader_grid_y_path(self.data_path))
         self.era5_x = [
             self.to_tensor(raw_era5_lon) / LATLON_SCALE_FACTOR,
             self.to_tensor(raw_era5_lat) / LATLON_SCALE_FACTOR,
         ]
-        elev_path = self.data_path + f"era5/elev_vars_{res}.npy"
-        self.era5_elev = self.to_tensor(np.load(elev_path)).permute(0, 2, 1)
+        self.nlon = self.era5_x[0].shape[0]
+        self.nlat = self.era5_x[1].shape[0]
+        elev_path = elev_vars_path(self.data_path)
+        raw_elev = np.load(elev_path)
+        assert_grid_match("elev_vars (raw)", raw_elev.shape[1:], (self.nlat, self.nlon))
+        self.era5_elev = self.to_tensor(raw_elev).permute(0, 2, 1)
+        assert_grid_match(
+            "era5_elev (loader)", self.era5_elev.shape[1:], (self.nlon, self.nlat)
+        )
 
         # Load hadISD
         self.hadisd_data = HadISDDataset(
@@ -1488,7 +1576,7 @@ class ForecasterDatasetDownscaling(Dataset):
             "path_to_forecasts/forecast_{}.mmap".format(self.mode),
             dtype="float32",
             mode="r",
-            shape=(len(dates), 121, 240, self.channels, 11),
+            shape=(len(dates), self.nlat, self.nlon, self.channels, 11),
         )
 
         return
@@ -1578,7 +1666,6 @@ class ForecastLoader(Dataset):
         mode,
         lead_time,
         era5_mode="sfc",
-        res=5,
         frequency=24,
         norm=True,
         diff=False,
@@ -1605,7 +1692,6 @@ class ForecastLoader(Dataset):
 
         self.lead_time = lead_time
         self.era5_mode = era5_mode
-        self.res = res
         self.frequency = frequency
         self.norm = norm
         self.diff = diff
@@ -1618,6 +1704,10 @@ class ForecastLoader(Dataset):
         self.finetune_eval_every = finetune_eval_every
         self.eval_steps = eval_steps
         channels = 30 if self.era5_mode == "4u_sfc" else 24
+
+        # Data/target grid (Grid A) size from the canonical grid files; used for IC/ERA5
+        # memmap shapes below and asserted against the orography array.
+        self.nlon, self.nlat = grid_dims_from_files(self.data_path)
 
         if self.frequency == 6:
             self.lead_time = self.lead_time * 4
@@ -1650,8 +1740,8 @@ class ForecastLoader(Dataset):
                     self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
-                    121,
-                    240,
+                    self.nlat,
+                    self.nlon,
                     channels,
                 )
             elif self.mode == "val":
@@ -1661,8 +1751,8 @@ class ForecastLoader(Dataset):
                     self.dates = pd.date_range("2019-01-01", "2019-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
-                    121,
-                    240,
+                    self.nlat,
+                    self.nlon,
                     channels,
                 )
             elif self.mode == "test":
@@ -1672,8 +1762,8 @@ class ForecastLoader(Dataset):
                     self.dates = pd.date_range("2018-01-01", "2018-12-31", freq=freq)
                 ic_shape = (
                     len(self.dates) - max(0, (self.finetune_step - 1) * 4),
-                    121,
-                    240,
+                    self.nlat,
+                    self.nlon,
                     channels,
                 )
 
@@ -1701,7 +1791,7 @@ class ForecastLoader(Dataset):
                     self.dates = pd.date_range(start_date, end_date, freq=freq)
                 else:
                     self.dates = pd.date_range("2007-01-02", "2017-12-31", freq=freq)
-            ic_shape = (len(self.dates), 121, 240, channels)
+            ic_shape = (len(self.dates), self.nlat, self.nlon, channels)
 
             self.ic = np.memmap(
                 self.ic_path + "/ic_{}.mmap".format(self.mode),
@@ -1710,15 +1800,21 @@ class ForecastLoader(Dataset):
                 shape=ic_shape,
             )
 
-        # Orography
+        # Orography. Raw file is (channels, nlat, nlon).
         self.era5_elev = np.float32(
-            np.load(self.data_path + "era5/elev_vars_{}.npy".format(res))
+            np.load(elev_vars_path(self.data_path))
+        )
+        assert_grid_match(
+            "elev_vars (raw)", self.era5_elev.shape[1:], (self.nlat, self.nlon)
         )
         elev_mean = self.era5_elev.mean(axis=(1, 2))[:, np.newaxis, np.newaxis]
         elev_std = self.era5_elev.std(axis=(1, 2))[:, np.newaxis, np.newaxis]
         self.era5_elev = (self.era5_elev - elev_mean) / elev_std
         # Align to (channels, lon, lat) like ERA5 fields used by ForecastLoader.
         self.era5_elev = np.transpose(self.era5_elev, (0, 2, 1))
+        assert_grid_match(
+            "era5_elev (loader)", self.era5_elev.shape[1:], (self.nlon, self.nlat)
+        )
 
         # ERA5 ground truth data for training
         self.era5_sfc = [
@@ -1729,20 +1825,14 @@ class ForecastLoader(Dataset):
         # Noramalisation factors
         self.means = (
             self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/mean_{}_{}.npy".format(self.era5_mode, self.res)
-                )
+                np.load(norm_mean_path(self.data_path, self.era5_mode))
             )
             .unsqueeze(1)
             .unsqueeze(1)
         )
         self.stds = (
             self.to_tensor(
-                np.load(
-                    self.data_path
-                    + "norm_factors/std_{}_{}.npy".format(self.era5_mode, self.res)
-                )
+                np.load(norm_std_path(self.data_path, self.era5_mode))
             )
             .unsqueeze(1)
             .unsqueeze(1)
@@ -1752,8 +1842,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_{}.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/mean_diff_{}_1.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1764,8 +1854,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_{}.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/std_diff_{}_1.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1777,8 +1867,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_{}_6h.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/mean_diff_{}_1_6h.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1789,8 +1879,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_{}_6h.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/std_diff_{}_1_6h.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1802,8 +1892,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_{}_12h.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/mean_diff_{}_1_12h.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1814,8 +1904,8 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_{}_12h.npy".format(
-                            self.era5_mode, self.res
+                        + "norm_factors/std_diff_{}_1_12h.npy".format(
+                            self.era5_mode
                         )
                     )
                 )
@@ -1886,19 +1976,12 @@ class ForecastLoader(Dataset):
         else:
             levels = 24
 
-        if self.res == 1:
-            x = 240
-            y = 121
-        elif self.res == 5:
-            x = 64
-            y = 32
+        x = self.nlon
+        y = self.nlat
 
         freq_tag = "6" if self.frequency == 6 else "1d"
-        memmap_path = (
-            self.data_path
-            + "era5/era5_{}_{}_{}_{}.memmap".format(
-                self.era5_mode, self.res, freq_tag, year
-            )
+        memmap_path = era5_memmap_path(
+            self.data_path, self.era5_mode, freq_tag, year
         )
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
@@ -2031,7 +2114,6 @@ class WeatherDatasetE2E(WeatherDataset):
         hadisd_var,
         max_steps_per_epoch=None,
         era5_mode="sfc",
-        res=1,
         filter_dates=None,
         var_start=0,
         var_end=24,
@@ -2047,7 +2129,6 @@ class WeatherDatasetE2E(WeatherDataset):
             end_date,
             lead_time,
             era5_mode,
-            res=res,
             filter_dates=filter_dates,
             diff=diff,
         )
@@ -2070,7 +2151,6 @@ class WeatherDatasetE2E(WeatherDataset):
             end_date=end_date,
             lead_time=0,
             era5_mode="4u",
-            res=1,
             var_start=0,
             var_end=24,
             diff=False,
@@ -2083,7 +2163,6 @@ class WeatherDatasetE2E(WeatherDataset):
             mode=mode,
             lead_time=lead_time,
             era5_mode=era5_mode,
-            res=1,
             frequency=6,
             diff=True,
             u_only=False,

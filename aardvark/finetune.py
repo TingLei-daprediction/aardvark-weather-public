@@ -66,9 +66,9 @@ def main(rank, world_size, output_dir, args):
 
     # Instantiate loss function
     if args.loss == "lw_rmse":
-        lf = WeightedRmseLoss(args.res, weight_per_variable=False)
+        lf = WeightedRmseLoss(weight_per_variable=False)
     elif args.loss == "lw_rmse_pressure_weighted":
-        lf = PressureWeightedRmseLoss(args.res, args.era5_mode)
+        lf = PressureWeightedRmseLoss(args.era5_mode)
     elif args.loss == "rmse":
         lf = RmseLoss()
 
@@ -80,12 +80,11 @@ def main(rank, world_size, output_dir, args):
         in_channels=forecast_config["in_channels"],
         out_channels=forecast_config["out_channels"],
         int_channels=forecast_config["int_channels"],
-        device="cuda",
-        res=forecast_config["res"],
-        gnp=bool(0),
+        device="cuda",        gnp=bool(0),
         decoder=forecast_config["decoder"],
         mode=forecast_config["mode"],
         film=bool(forecast_config["film"]),
+        cmd_init_ls=forecast_config.get("cmd_init_ls", 0.001),
     )
 
     try:
@@ -121,12 +120,11 @@ def main(rank, world_size, output_dir, args):
             in_channels=forecast_config["in_channels"],
             out_channels=forecast_config["out_channels"],
             int_channels=forecast_config["int_channels"],
-            device="cuda",
-            res=forecast_config["res"],
-            gnp=bool(0),
+            device="cuda",            gnp=bool(0),
             decoder=forecast_config["decoder"],
             mode=forecast_config["mode"],
             film=bool(forecast_config["film"]),
+            cmd_init_ls=forecast_config.get("cmd_init_ls", 0.001),
         )
 
         model.load_state_dict(new_state_dict)
@@ -142,9 +140,7 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="train",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,
-            res=args.res,
-            frequency=args.frequency,
+            era5_mode=args.era5_mode,            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -157,9 +153,7 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="val",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,
-            res=args.res,
-            frequency=args.frequency,
+            era5_mode=args.era5_mode,            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -169,9 +163,7 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="test",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,
-            res=args.res,
-            frequency=args.frequency,
+            era5_mode=args.era5_mode,            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -402,7 +394,6 @@ if __name__ == "__main__":
     parser.add_argument("--lead_time", type=int, default=1)
     parser.add_argument("--era5_mode", default="4u_sfc")
     parser.add_argument("--weight_decay", type=float, default=1e-6)
-    parser.add_argument("--res", type=int, default=1)
     parser.add_argument("--frequency", type=int, default=6)
 
     parser.add_argument("--diff", type=int, default=1)

@@ -48,13 +48,13 @@ if __name__ == "__main__":
     # Setup normalisation factors
     era5_mean_spatial = None
     means = np.load(
-        "aux_data_path/norm_factors/mean_{}_{}.npy".format(
-            forecast_config["era5_mode"], forecast_config["res"]
+        "aux_data_path/norm_factors/mean_{}_1.npy".format(
+            forecast_config["era5_mode"]
         )
     )[np.newaxis, np.newaxis, np.newaxis, :]
     stds = np.load(
-        "aux_data_path/norm_factors/std_{}_{}.npy".format(
-            forecast_config["era5_mode"], forecast_config["res"]
+        "aux_data_path/norm_factors/std_{}_1.npy".format(
+            forecast_config["era5_mode"]
         )
     )[np.newaxis, np.newaxis, np.newaxis, :]
 
@@ -90,7 +90,6 @@ if __name__ == "__main__":
             end_date=date[1],
             lead_time=0,
             era5_mode=forecast_config["era5_mode"],
-            res=1,
             var_start=0,
             var_end=forecast_config["out_channels"],
             diff=False,
@@ -104,11 +103,11 @@ if __name__ == "__main__":
             out_channels=forecast_config["out_channels"],
             int_channels=forecast_config["int_channels"],
             device="cuda",
-            res=forecast_config["res"],
             gnp=bool(0),
             decoder=forecast_config["decoder"],
             mode=forecast_config["mode"],
             film=bool(0),
+            cmd_init_ls=forecast_config.get("cmd_init_ls", 0.001),
         )
 
         best_epoch = np.argmin(

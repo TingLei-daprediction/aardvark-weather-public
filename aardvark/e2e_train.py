@@ -82,13 +82,12 @@ def main(rank, world_size, output_dir, args):
     # Setup loss function
     if args.loss == "lw_rmse":
         lf = WeightedRmseLoss(
-            args.res,
             start_ind=0,
             end_ind=out_channels,
             weight_per_variable=False,
         )
     elif args.loss == "lw_rmse_pressure_weighted":
-        lf = PressureWeightedRmseLoss(args.res, era5_mode)
+        lf = PressureWeightedRmseLoss(era5_mode)
     elif args.loss == "rmse":
         lf = RmseLoss()
     elif args.loss == "downscaling_rmse":
@@ -113,9 +112,7 @@ def main(rank, world_size, output_dir, args):
         end_date="2017-12-31",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",
-        res=args.res,
-        var_start=0,
+        mode="train",        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -131,9 +128,7 @@ def main(rank, world_size, output_dir, args):
         end_date="2019-12-21",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",
-        res=args.res,
-        var_start=0,
+        mode="train",        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -148,9 +143,7 @@ def main(rank, world_size, output_dir, args):
         end_date="2018-12-21",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",
-        res=args.res,
-        var_start=0,
+        mode="train",        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -222,7 +215,6 @@ if __name__ == "__main__":
 
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument("--max_steps_per_epoch", type=int)
-    parser.add_argument("--res", type=int, default=1)
     parser.add_argument("--frequency", type=int, default=6)
     parser.add_argument("--region", default="global")
     parser.add_argument("--var", choices=["tas", "u", "v", "psl", "ws"])

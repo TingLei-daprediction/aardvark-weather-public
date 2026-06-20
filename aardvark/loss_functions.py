@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from grid_config import lat_weights_path
+
 
 class RmseLoss(nn.Module):
     """
@@ -76,7 +78,6 @@ class PressureWeightedRmseLoss(nn.Module):
 
     def __init__(
         self,
-        res,
         era5_mode,
         data_dir,
         aux_data_dir,
@@ -85,7 +86,7 @@ class PressureWeightedRmseLoss(nn.Module):
         super().__init__()
 
         self.weights = torch.from_numpy(
-            np.load(aux_data_dir + "lat_weights/weights_lat_{}.npy".format(res)).T[
+            np.load(lat_weights_path(aux_data_dir)).T[
                 np.newaxis, ..., np.newaxis
             ]
         ).float()
@@ -147,7 +148,6 @@ class WeightedRmseLoss(nn.Module):
 
     def __init__(
         self,
-        res,
         data_dir,
         aux_data_dir,
         weight_per_variable=False,
@@ -160,7 +160,7 @@ class WeightedRmseLoss(nn.Module):
         self.end_ind = end_ind
 
         self.weights = torch.from_numpy(
-            np.load(aux_data_dir + "lat_weights/weights_lat_{}.npy".format(res)).T[
+            np.load(lat_weights_path(aux_data_dir)).T[
                 np.newaxis, ..., np.newaxis
             ]
         ).float()

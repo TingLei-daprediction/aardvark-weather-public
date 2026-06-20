@@ -8,6 +8,7 @@ from set_convs import convDeepSet
 from unet_wrap_padding import Unet
 from vit import *
 from models import *
+from grid_config import model_grid_x_path, model_grid_y_path
 
 hadisd_publisher_shifts = {
     "tas": 273.15,
@@ -69,11 +70,11 @@ class ConvCNPWeatherOnToOff(nn.Module):
         out_channels,
         int_channels,
         device,
-        res,
         data_path="../data/",
         mode="end_to_end",
         decoder=None,
         film=False,
+        cmd_init_ls=0.001,
     ):
 
         super().__init__()
@@ -89,24 +90,28 @@ class ConvCNPWeatherOnToOff(nn.Module):
         self.int_y = 128
         self.mode = mode
         self.film = film
+        self.cmd_init_ls = float(cmd_init_ls)
 
-        # Load lon-lat of internal discretisation
+        # Load lon-lat of the data/target grid (Grid A)
         self.era5_x = (
             torch.from_numpy(
-                np.load(data_path + "grid_lon_lat/era5_x_{}.npy".format(res))
+                np.load(model_grid_x_path(data_path))
             ).float()
             / 360
         )
         self.era5_y = (
             torch.from_numpy(
-                np.load(data_path + "grid_lon_lat/era5_y_{}.npy".format(res))
+                np.load(model_grid_y_path(data_path))
             ).float()
             / 360
         )
+        # Grid A dimensions, derived from the grid files (not hard-wired).
+        self.nlon = int(self.era5_x.shape[0])
+        self.nlat = int(self.era5_y.shape[0])
 
         # Setup setconv
         self.sc_out = convDeepSet(
-            0.001, "OnToOff", density_channel=False, device=self.device
+            self.cmd_init_ls, "OnToOff", density_channel=False, device=self.device
         )
 
         if self.mode not in ["downscaling", "end_to_end"]:
@@ -145,7 +150,7 @@ class ConvCNPWeatherOnToOff(nn.Module):
         # Transform to station predictions with setconv
         num_channels = x.shape[3]
         x = x.permute(0, 3, 1, 2)
-        assert list(x.shape) == [batch_size, num_channels, 240, 121]
+        assert list(x.shape) == [batch_size, num_channels, self.nlon, self.nlat]
         x_target = task["x_target"]
         num_stations = x_target.shape[2]
 
@@ -231,10 +236,10 @@ def load_model(results_dir, device, config_dir=None, epoch=None):
         out_channels=config["out_channels"],
         int_channels=config["int_channels"],
         device=device,
-        res=config["res"],
         decoder=config["decoder"],
         mode=config["mode"],
         film=False,
+        cmd_init_ls=config.get("cmd_init_ls", 0.001),
     )
 
     full_state_dict = torch.load(results_dir + f"epoch_{epoch}", map_location=device)
