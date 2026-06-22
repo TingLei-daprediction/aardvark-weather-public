@@ -1,0 +1,36 @@
+# Grid configuration for the Oklahoma 2.5 km domain (read by grid_config.load_grid_config).
+#
+# Grid A (nlon, nlat, extent) is DERIVED from the era5_x/era5_y coordinate files named below
+# -- do NOT put nlon/nlat or extent here. These MUST be 1-D ascending degree axes (longitude
+# on the 0-360 branch), NOT the native 2-D Lambert (161, 322) RTMA arrays: the model's setconv
+# kernel is separable in lon/lat and requires 1-D axes. Build them with
+# scripts/build_grid_lonlat.py, e.g.:
+#   python scripts/build_grid_lonlat.py --lon_min 257.0 --lon_max 265.0 --nlon 322 \
+#       --lat_min 33.6 --lat_max 37.6 --nlat 161 --tag ok --out_dir data/grid_lon_lat
+# (replace the extent with the real OK domain bounds).
+#
+# Grid B (the inner ViT grid used by the assimilation/encoder path) is a free choice, but must
+# be EVEN and >= (nlon, nlat). For the 322 x 161 box below: int_x >= 322, int_y >= 161.
+
+# Coordinate file names (1-D OK axes built by build_grid_lonlat.py).
+grid_files:
+  # Read by the datasets, relative to data_path:
+  loader_x: "era5/era5_x_ok.npy"
+  loader_y: "era5/era5_y_ok.npy"
+  # Read by the model, relative to model_data_path:
+  model_x: "grid_lon_lat/era5_x_ok.npy"
+  model_y: "grid_lon_lat/era5_y_ok.npy"
+
+# Other grid/domain-dependent data files. {era5_mode}, {freq}, {year} are substituted at
+# runtime. These MUST be the OK-domain memmaps (built on the same 1-D OK grid), not the global
+# files -- every grid-dependent array is asserted against the derived OK nlon/nlat.
+data_files:
+  elev_vars: "era5/elev_vars_ok.npy"
+  norm_mean: "norm_factors/mean_{era5_mode}_ok.npy"
+  norm_std: "norm_factors/std_{era5_mode}_ok.npy"
+  era5_memmap: "era5/era5_{era5_mode}_ok_{freq}_{year}.memmap"
+  lat_weights: "lat_weights/weights_lat_ok.npy"
+
+# Inner ViT grid (Grid B): even and >= data-grid (nlon=322, nlat=161).
+int_x: 384
+int_y: 192
