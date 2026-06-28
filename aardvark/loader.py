@@ -86,6 +86,7 @@ class WeatherDataset(Dataset):
         aux_data_path=None,
         disable_igra=False,
         time_freq="6H",
+        obs_set="all",
     ):
 
         super().__init__()
@@ -103,6 +104,10 @@ class WeatherDataset(Dataset):
         self.diff = diff
         self.disable_igra = disable_igra
         self.time_freq = time_freq
+        # obs_set selects which observation modalities are loaded/encoded.
+        # "all" = full Aardvark set; "rtma_surface" = surface obs only (tas, sh, psl, u, v).
+        self.obs_set = obs_set
+        self.surface_only = obs_set == "rtma_surface"
         self.offsets = build_offsets(self.time_freq)
 
         # Data/target grid (Grid A) size, derived from the canonical grid files. Set before
@@ -130,32 +135,36 @@ class WeatherDataset(Dataset):
                     "dataset may be empty or misaligned."
                 )
 
-        # Load the input modalities
-        if not self.disable_igra:
-            print("Loading IGRA")
-            self.load_igra()
+        # Load the input modalities. For obs_set="rtma_surface" only the surface obs
+        # (HadISD per-variable path) are loaded; the global modalities are skipped -- required
+        # because the regional (OK) setup does not provide those global obs files.
+        if not self.surface_only:
+            if not self.disable_igra:
+                print("Loading IGRA")
+                self.load_igra()
 
-        print("Loading AMSU-A")
-        self.load_amsua()
+            print("Loading AMSU-A")
+            self.load_amsua()
 
-        print("Loading AMSU-B")
-        self.load_amsub()
+            print("Loading AMSU-B")
+            self.load_amsub()
 
-        print("Loading ICOADS")
-        self.load_icoads()
+            print("Loading ICOADS")
+            self.load_icoads()
 
-        print("Loading IASI")
-        self.load_iasi()
+            print("Loading IASI")
+            self.load_iasi()
 
-        print("Loading GEO")
-        self.load_sat_data()
+            print("Loading GEO")
+            self.load_sat_data()
 
         print("Loading HADISD")
         self.load_hadisd(self.mode)
 
-        print("Loading ASCAT")
-        self.load_ascat_data()
-        self.load_hirs_data()
+        if not self.surface_only:
+            print("Loading ASCAT")
+            self.load_ascat_data()
+            self.load_hirs_data()
 
         # Load the ground truth data for training
         print("Loading ERA5")
@@ -583,7 +592,12 @@ class WeatherDataset(Dataset):
         self.hadisd_x = []
         self.hadisd_alt = []
         self.hadisd_y = []
-        hadisd_vars = ["tas", "tds", "psl", "u", "v"]
+        # RTMA surface set uses specific humidity (sh) in place of HadISD dewpoint (tds);
+        # the per-variable loading/encoding path is otherwise identical (option A reuse).
+        if getattr(self, "surface_only", False):
+            hadisd_vars = ["tas", "sh", "psl", "u", "v"]
+        else:
+            hadisd_vars = ["tas", "tds", "psl", "u", "v"]
         for var in hadisd_vars:
             lon = lon_to_0_360(
                 np.load(
@@ -742,6 +756,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         aux_data_path=None,
         disable_igra=False,
         time_freq="6H",
+        obs_set="all",
     ):
 
         super().__init__(
@@ -757,6 +772,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             aux_data_path=aux_data_path,
             disable_igra=disable_igra,
             time_freq=time_freq,
+            obs_set=obs_set,
         )
 
         # Setup
@@ -883,62 +899,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         index = self.index[index]
         date = self.dates[index]
 
-        # ICOADS
-        icoads_y = self.icoads_y[index + self.icoads_index_offset, ...]
-        if getattr(self, "icoads_x_is_static", False):
-            icoads_x = [self.icoads_x[:, 0], self.icoads_x[:, 1]]
-        else:
-            icoads_x = self.icoads_x[index + self.icoads_index_offset, ...]
-            icoads_x = [icoads_x[0, :], icoads_x[1, :]]
-        icoads_x = [self.to_tensor(i) for i in icoads_x]
-        icoads_y = self.to_tensor(icoads_y)
-        icoads_y = self.norm_data(icoads_y, self.icoads_means, self.icoads_stds)
-
-        # GRIDSAT
-        sat_y = self.sat_y[index + self.sat_index_offset, ...]
-        sat_x = [self.to_tensor(i) for i in self.sat_x]
-        sat_y = self.to_tensor(sat_y)
-        sat_y = self.norm_data(sat_y, self.sat_means, self.sat_stds)
-
-        # AMSU-A
-        amsua_y = self.to_tensor(self.amsua_y[index + self.amsua_index_offset, ...])
-        amsua_y[amsua_y < -998] = torch.nan
-        amsua_x = [self.to_tensor(i) for i in self.amsua_x]
-        amsua_y[amsua_y < -998] = np.nan
-        amsua_y = self.norm_data(amsua_y, self.amsua_means, self.amsua_stds)
-
-        # AMSU-B
-        amsub_y = self.to_tensor(self.amsub_y[index + self.amsub_index_offset, ...])
-        amsub_y[amsub_y < -998] = torch.nan
-        amsub_x = [self.to_tensor(i) for i in self.amsub_x]
-        amsub_y[amsub_y < -998] = np.nan
-        amsub_y = self.norm_data(amsub_y, self.amsub_means, self.amsub_stds)
-
-        # IASI
-        iasi_y = self.to_tensor(self.iasi[index + self.iasi_index_offset, ...])
-        iasi_x = [self.to_tensor(i) for i in self.iasi_x]
-        iasi_y = self.norm_data(iasi_y, self.iasi_means, self.iasi_stds)
-
-        # IGRA (optional)
-        if not self.disable_igra:
-            igra_y = self.to_tensor(self.igra_y[index + self.igra_index_offset, ...])
-            igra_x = [self.igra_x[:, 0], self.igra_x[:, 1]]
-            igra_x = [self.to_tensor(i) for i in igra_x]
-            igra_y = self.norm_data(igra_y, self.igra_means, self.igra_stds)
-
-        # ASCAT
-        ascat_y = self.to_tensor(self.ascat_y[index + self.ascat_index_offset, ...])
-        ascat_x = [self.to_tensor(i) for i in self.ascat_x]
-        ascat_y[..., 4][ascat_y[..., 4] < -990] = np.nan
-        ascat_y = self.norm_data(ascat_y, self.ascat_means, self.ascat_stds)
-
-        # HIRS
-        hirs_y = self.to_tensor(self.hirs_y[index + self.hirs_index_offset, ...])
-        hirs_y[hirs_y < -998] = np.nan
-        hirs_x = [self.to_tensor(i) for i in self.hirs_x]
-        hirs_y = self.norm_data(hirs_y, self.hirs_means, self.hirs_stds)
-
-        # HadISD
+        # HadISD (always loaded -- the surface obs used by both obs_set modes)
         x_context_hadisd = self.hadisd_x
         y_context_hadisd = [
             i[index + self.hadisd_index_offset, :] for i in self.hadisd_y
@@ -963,28 +924,6 @@ class WeatherDatasetAssimilation(WeatherDataset):
             "x_context_hadisd_{}".format(prefix): x_context_hadisd,
             "y_context_hadisd_{}".format(prefix): y_context_hadisd,
             "climatology_{}".format(prefix): self.to_tensor(climatology),
-            "sat_x_{}".format(prefix): sat_x,
-            "sat_{}".format(prefix): sat_y,
-            "icoads_x_{}".format(prefix): icoads_x,
-            "icoads_{}".format(prefix): icoads_y,
-            **(
-                {}
-                if self.disable_igra
-                else {
-                    "igra_x_{}".format(prefix): igra_x,
-                    "igra_{}".format(prefix): igra_y,
-                }
-            ),
-            "amsua_{}".format(prefix): amsua_y,
-            "amsua_x_{}".format(prefix): amsua_x,
-            "amsub_{}".format(prefix): amsub_y,
-            "amsub_x_{}".format(prefix): amsub_x,
-            "iasi_{}".format(prefix): iasi_y,
-            "iasi_x_{}".format(prefix): iasi_x,
-            "ascat_{}".format(prefix): ascat_y,
-            "ascat_x_{}".format(prefix): ascat_x,
-            "hirs_{}".format(prefix): hirs_y,
-            "hirs_x_{}".format(prefix): hirs_x,
             "y_target_{}".format(prefix): era5_target[
                 ..., self.var_start : self.var_end
             ],
@@ -994,6 +933,88 @@ class WeatherDatasetAssimilation(WeatherDataset):
             "aux_time_{}".format(prefix): aux_time,
             "lt": torch.Tensor([self.var_start]),
         }
+
+        # Global observation modalities -- skipped entirely for obs_set="rtma_surface".
+        if not self.surface_only:
+            # ICOADS
+            icoads_y = self.icoads_y[index + self.icoads_index_offset, ...]
+            if getattr(self, "icoads_x_is_static", False):
+                icoads_x = [self.icoads_x[:, 0], self.icoads_x[:, 1]]
+            else:
+                icoads_x = self.icoads_x[index + self.icoads_index_offset, ...]
+                icoads_x = [icoads_x[0, :], icoads_x[1, :]]
+            icoads_x = [self.to_tensor(i) for i in icoads_x]
+            icoads_y = self.to_tensor(icoads_y)
+            icoads_y = self.norm_data(icoads_y, self.icoads_means, self.icoads_stds)
+
+            # GRIDSAT
+            sat_y = self.sat_y[index + self.sat_index_offset, ...]
+            sat_x = [self.to_tensor(i) for i in self.sat_x]
+            sat_y = self.to_tensor(sat_y)
+            sat_y = self.norm_data(sat_y, self.sat_means, self.sat_stds)
+
+            # AMSU-A
+            amsua_y = self.to_tensor(self.amsua_y[index + self.amsua_index_offset, ...])
+            amsua_y[amsua_y < -998] = torch.nan
+            amsua_x = [self.to_tensor(i) for i in self.amsua_x]
+            amsua_y[amsua_y < -998] = np.nan
+            amsua_y = self.norm_data(amsua_y, self.amsua_means, self.amsua_stds)
+
+            # AMSU-B
+            amsub_y = self.to_tensor(self.amsub_y[index + self.amsub_index_offset, ...])
+            amsub_y[amsub_y < -998] = torch.nan
+            amsub_x = [self.to_tensor(i) for i in self.amsub_x]
+            amsub_y[amsub_y < -998] = np.nan
+            amsub_y = self.norm_data(amsub_y, self.amsub_means, self.amsub_stds)
+
+            # IASI
+            iasi_y = self.to_tensor(self.iasi[index + self.iasi_index_offset, ...])
+            iasi_x = [self.to_tensor(i) for i in self.iasi_x]
+            iasi_y = self.norm_data(iasi_y, self.iasi_means, self.iasi_stds)
+
+            # ASCAT
+            ascat_y = self.to_tensor(self.ascat_y[index + self.ascat_index_offset, ...])
+            ascat_x = [self.to_tensor(i) for i in self.ascat_x]
+            ascat_y[..., 4][ascat_y[..., 4] < -990] = np.nan
+            ascat_y = self.norm_data(ascat_y, self.ascat_means, self.ascat_stds)
+
+            # HIRS
+            hirs_y = self.to_tensor(self.hirs_y[index + self.hirs_index_offset, ...])
+            hirs_y[hirs_y < -998] = np.nan
+            hirs_x = [self.to_tensor(i) for i in self.hirs_x]
+            hirs_y = self.norm_data(hirs_y, self.hirs_means, self.hirs_stds)
+
+            task.update(
+                {
+                    "sat_x_{}".format(prefix): sat_x,
+                    "sat_{}".format(prefix): sat_y,
+                    "icoads_x_{}".format(prefix): icoads_x,
+                    "icoads_{}".format(prefix): icoads_y,
+                    "amsua_{}".format(prefix): amsua_y,
+                    "amsua_x_{}".format(prefix): amsua_x,
+                    "amsub_{}".format(prefix): amsub_y,
+                    "amsub_x_{}".format(prefix): amsub_x,
+                    "iasi_{}".format(prefix): iasi_y,
+                    "iasi_x_{}".format(prefix): iasi_x,
+                    "ascat_{}".format(prefix): ascat_y,
+                    "ascat_x_{}".format(prefix): ascat_x,
+                    "hirs_{}".format(prefix): hirs_y,
+                    "hirs_x_{}".format(prefix): hirs_x,
+                }
+            )
+
+            # IGRA (optional)
+            if not self.disable_igra:
+                igra_y = self.to_tensor(self.igra_y[index + self.igra_index_offset, ...])
+                igra_x = [self.igra_x[:, 0], self.igra_x[:, 1]]
+                igra_x = [self.to_tensor(i) for i in igra_x]
+                igra_y = self.norm_data(igra_y, self.igra_means, self.igra_stds)
+                task.update(
+                    {
+                        "igra_x_{}".format(prefix): igra_x,
+                        "igra_{}".format(prefix): igra_y,
+                    }
+                )
 
         return task
 

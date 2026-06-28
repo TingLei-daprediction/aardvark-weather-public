@@ -81,8 +81,13 @@ def expected_in_channels_assimilation(
     disable_igra,
     two_frames,
     climatology_channels=24,
+    obs_set="all",
 ):
     # convDeepSet encoders output density + value per channel (2x).
+    aux_total = 4 + climatology_channels + 5  # elev vars + climatology + aux time channels
+    if obs_set == "rtma_surface":
+        # RTMA Phase 1: HadISD surface obs (5 vars x 2) + aux only; single frame.
+        return 2 * 5 + aux_total
     amsua = 2 * amsua_channels
     amsub = 2 * amsub_channels
     hirs = 2 * hirs_channels
@@ -94,7 +99,6 @@ def expected_in_channels_assimilation(
     iasi = iasi_channels
 
     obs_total = amsua + amsub + hirs + sat + icoads + hadisd + igra + ascat + iasi
-    aux_total = 4 + climatology_channels + 5  # elev vars + climatology + aux time channels
     if two_frames:
         return obs_total * 2 + aux_total
     return obs_total + aux_total
@@ -118,6 +122,8 @@ def main(rank, world_size, output_dir, args):
     master_port = args.master_port
     lead_time = args.lead_time
     era5_mode = args.era5_mode
+    if args.obs_set == "rtma_surface" and bool(args.two_frames):
+        raise ValueError("--obs_set rtma_surface currently supports only --two_frames 0")
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
 
@@ -180,6 +186,7 @@ def main(rank, world_size, output_dir, args):
             aux_data_path=args.aux_data_path,
             disable_igra=bool(args.disable_igra),
             time_freq=args.time_freq,
+            obs_set=args.obs_set,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -195,6 +202,7 @@ def main(rank, world_size, output_dir, args):
             aux_data_path=args.aux_data_path,
             disable_igra=bool(args.disable_igra),
             time_freq=args.time_freq,
+            obs_set=args.obs_set,
         )
 
     # Case 2: training processor
@@ -327,6 +335,7 @@ def main(rank, world_size, output_dir, args):
             disable_igra=bool(args.disable_igra),
             two_frames=bool(args.two_frames),
             climatology_channels=getattr(train_dataset, "climatology_channels", 24),
+            obs_set=args.obs_set,
         )
         expected_model_in_channels = None
         if args.mode == "assimilation":
@@ -378,6 +387,7 @@ def main(rank, world_size, output_dir, args):
             cmd_init_ls=args.cmd_init_ls,
             int_x=args.int_x,
             int_y=args.int_y,
+            obs_set=args.obs_set,
         )
 
         # Cross-check: the model's grid files (model_data_path) and the dataset's grid files
@@ -480,6 +490,13 @@ if __name__ == "__main__":
     parser.add_argument("--start_ind", type=int, default=0)
     parser.add_argument("--end_ind", type=int, default=24)
     parser.add_argument("--disable_igra", type=int, default=0)
+    parser.add_argument(
+        "--obs_set",
+        default="all",
+        choices=["all", "rtma_surface"],
+        help="Observation set: 'all' = full Aardvark modalities; "
+        "'rtma_surface' = surface obs only (tas, sh, psl, u, v).",
+    )
     parser.add_argument("--time_freq", default="1D")
     parser.add_argument("--amsua_channels", type=int, default=None)
     parser.add_argument("--amsub_channels", type=int, default=None)

@@ -38,11 +38,14 @@ class ConvCNPWeather(nn.Module):
         cmd_init_ls=0.001,
         int_x=256,
         int_y=128,
+        obs_set="all",
     ):
 
         super().__init__()
 
         self.device = device
+        # obs_set: "all" = full Aardvark encoder stack; "rtma_surface" = HadISD surface obs only.
+        self.obs_set = obs_set
 
         if (
             expected_in_channels is not None
@@ -374,7 +377,25 @@ class ConvCNPWeather(nn.Module):
                     device=elev.device,
                 )
 
-            if not self.two_frames:
+            if self.obs_set == "rtma_surface":
+                # RTMA Phase 1: surface obs (HadISD per-variable path) + elev + climatology
+                # + time only. All global obs modalities are omitted.
+                encodings = [
+                    self.encoder_hadisd(task, "current"),
+                    elev,
+                    task["climatology_current"],
+                    torch.ones(
+                        (
+                            elev.shape[0],
+                            task["aux_time_current"].shape[1],
+                            elev.shape[2],
+                            elev.shape[3],
+                        ),
+                        device=elev.device,
+                    )
+                    * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
+                ]
+            elif not self.two_frames:
                 encodings = [
                     self.encoder_iasi(task, "current"),
                     self.encoder_ascat(task, "current"),
@@ -398,10 +419,6 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
-                if not getattr(self, "_debug_encoding_shapes", False):
-                    for i, enc in enumerate(encodings):
-                        print(f"[DEBUG] encodings[{i}] shape: {tuple(enc.shape)}")
-                    self._debug_encoding_shapes = True
             else:
                 # Option to pass two timesteps (t=-1 and t=0) as input
                 encodings = [
@@ -436,6 +453,10 @@ class ConvCNPWeather(nn.Module):
                     )
                     * task["aux_time_current"].unsqueeze(-1).unsqueeze(-1),
                 ]
+            if not getattr(self, "_debug_encoding_shapes", False):
+                for i, enc in enumerate(encodings):
+                    print(f"[DEBUG] encodings[{i}] shape: {tuple(enc.shape)}")
+                self._debug_encoding_shapes = True
             if self.debug_nan_checks and not getattr(self, "_debug_encoding_nans", False):
                 for i, enc in enumerate(encodings):
                     enc_nan = torch.isnan(enc).sum().item()
@@ -464,6 +485,13 @@ class ConvCNPWeather(nn.Module):
                 )
                 raise RuntimeError(f"Encoding spatial mismatch: {spatial}")
             x = torch.cat(encodings, dim=1)
+            # Guard against obs_set / channel-count drift between the loader, this encoder
+            # stack, and expected_in_channels_assimilation: the concatenated obs sample must
+            # match the channel count the model (and ViT input projection) was built for.
+            assert x.shape[1] == self.in_channels, (
+                f"encoder produced {x.shape[1]} channels but in_channels={self.in_channels} "
+                f"(obs_set={self.obs_set}); check loader/forward/expected_in_channels consistency"
+            )
             if self.debug_nan_checks and not getattr(self, "_debug_concat_nans", False):
                 x_nan = torch.isnan(x).sum().item()
                 x_inf = torch.isinf(x).sum().item()
