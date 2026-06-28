@@ -195,7 +195,7 @@ class ConvCNPWeather(nn.Module):
         """
 
         encodings = []
-        for channel in range(4):
+        for channel in range(len(self.hadisd_setconvs)):
             encodings.append(
                 self.hadisd_setconvs[channel](
                     x_in=[
