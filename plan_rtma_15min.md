@@ -241,6 +241,11 @@ so all existing `all`/6H/1D paths are byte-identical:
   - `load_era5_time` and `get_index` use `month_frame(date, step_minutes)` for both target and
     obs (same key -> alignment by construction); `hadisd_index_offset` skipped on this path.
   - `get_time_aux`: `hour + minute/60` (all 3 copies; backward-compatible).
+  - `get_time_aux` (base copy only): interannual channel `year = 0.0` on the monthly path
+    (`getattr(self,"monthly",False)`), dropping the global `(year-2007)/15` term. The daily 00z
+    background already carries that signal; **channel count stays 5**, so `in_channels` is
+    unchanged. Gated -> global/6H/1D byte-identical; downscaling/forecast `get_time_aux` copies
+    untouched (they have no `self.monthly`).
   - Guard: `monthly + two_frames` raises `NotImplementedError` (year-boundary path unsupported).
   - Guard: `month_frame` rejects timestamps not aligned to the cadence (e.g. 13:37 at 15-min) --
     prevents a misaligned start/end date silently snapping to the wrong row.

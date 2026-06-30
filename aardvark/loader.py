@@ -881,7 +881,10 @@ class WeatherDataset(Dataset):
         """
 
         doy = current_date.dayofyear
-        year = (current_date.year - 2007) / 15
+        # Interannual term: dropped (set to 0) on the RTMA monthly path -- the daily 00z
+        # background already carries day-specific/interannual state, and the global 2007/15
+        # baseline is not meaningful for OK. Channel count stays 5 (in_channels unchanged).
+        year = 0.0 if getattr(self, "monthly", False) else (current_date.year - 2007) / 15
         # Fractional hour so sub-hourly (e.g. 15-min) steps are distinguishable. Backward
         # compatible: 6H/1D timestamps have minute==0, so this equals the integer hour.
         time_of_day = current_date.hour + current_date.minute / 60
