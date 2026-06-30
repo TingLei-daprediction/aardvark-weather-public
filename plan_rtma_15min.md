@@ -113,15 +113,10 @@ per-modality offsets used to do.
 
 ## Open decisions for colleagues
 
-1. **Climatology time resolution.** Climatology is a multi-year average, normally a single file
-   (not per-month). Options: keep **daily** (1 value per day-of-year, indexed by `dayofyear`,
-   simplest -- the encoder uses it as coarse context) vs. **diurnal** (96 time-of-day slots) for
-   a 15-min-aware climatology. The current file has only 4 (6-hourly) slots, so the 15-min
-   option needs a rebuilt climatology. **Recommended first cut: keep climatology daily.** Under
-   15-min runtime the lookup stays day-of-year based --
-   `climatology = self.climatology[0, date.dayofyear - 1, ...]` -- and the code/comment must make
-   explicit that climatology is **daily, not 15-minute** context. A 96-slot diurnal climatology
-   can be added later if verification shows it is needed. (To be discussed separately.)
+1. **Climatology / 00z background.** DECIDED: the climatology channel carries a **per-actual-day
+   00z background** (a forecast valid at 00 UTC), stored **one file per month**. See the
+   "Climatology: per-month 00z background" section below for the implementation plan. (Open
+   sub-decisions there: raw vs. normalized, file name, background lead time.)
 2. **File-name convention.** `_<YYYY>-<MM>` vs. `_<YYYY>_<MM>`; zero-pad month. Must be identical
    for obs and target.
 3. **On-demand vs. pre-open.** Pre-open all month memmaps into a dict (lazy mmap, cheap) vs.
@@ -151,6 +146,87 @@ A wrong frame count (e.g. a missing/partial month) must fail loudly, not silentl
 - `[DEBUG] era5_mode ... time_freq 15min era5_frame_shape ...` shows the expected channels.
 - For a 6H/1D regression check: `get_time_aux` output is unchanged (minute==0).
 
+## Daily 00z background (per-month) -- fills the encoder's "climatology" slot (PLAN, not implemented)
+
+**Terminology (review):** this field is a **daily 00z background / prior** -- a date-specific
+forecast valid at 00 UTC -- **NOT climatology** in Aardvark's original sense (a multi-year
+day-of-year mean). To avoid confusion, name it **`background`** in code and comments
+(`self.background`, `_load_background_monthly`); it merely *reuses* the model-facing input slot
+`task["climatology_current"]` so the model needs no change. Suggested code comment:
+
+> In the rtma_surface + 15min monthly path, the existing `climatology_current` input slot is
+> populated by a normalized daily 00z background field -- a date-specific background/prior, NOT a
+> multi-year climatology.
+
+For `rtma_surface` + `15min`, this slot carries a **00z background field** (a forecast at a
+chosen lead time, valid at 00 UTC), per **actual day**, stored **one file per month**. It is NOT
+derived from the target and is NOT a day-of-year mean. Same 5 fields as the target, so the slot's
+channel count = 5 and `in_channels` stays 24.
+
+### File layout
+- `era5/background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap`, shape `(days_in_month, C, nlon, nlat)` --
+  **one frame per day = that day's 00z background**. `C` = 5 (target fields).
+- Built from the background/forecast source (data-side, e.g. an adapted `build_climatology.py`
+  that emits per-month daily-00z fields). Out of loader scope.
+
+### Index mapping (reuses the monthly machinery)
+For a sample at `date` on day `D` of month `M`, year `Y`:
+```python
+(year, month), _ = month_frame(date, self.step_minutes)        # same (Y, M) as obs/target
+background = self.background[(year, month)][date.day - 1, ...]  # 00z of day D, frame = D-1
+```
+All 96 intraday samples of day `D` read frame `D-1` -> the same 00z background (no intra-day
+time dependence). No leakage: the background is a forecast, distinct from the target.
+
+### Loader changes (all gated on `self.monthly`; existing paths untouched)
+1. **`__init__`** -- gate the climatology block (`loader.py:222-236`):
+   ```python
+   if self.monthly:
+       self.background = self._load_background_monthly()   # {(Y,M): memmap (days, C, nlon, nlat)}
+       self.climatology_channels = <C, inferred from the first month file>
+   else:
+       ... existing climatology_data.mmap load ...
+   ```
+2. **New `_load_background_monthly`** (mirror `_load_era5_monthly`, but **daily** -- one frame
+   per day, not 96):
+   - path `era5/background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap`;
+   - shape `(days_in_month, C, nlon, nlat)`, infer `C` once from the first month;
+   - **hard-assert** every month (review point 6):
+     - `frames == days_in_month`,
+     - `C == target channels (== 5)`,
+     - spatial dims `== (nlon, nlat)`.
+     (i.e. `nbytes == days_in_month * C_target * nlon * nlat * 4`, with `C` cross-checked against
+     the target's channel count, not just inferred independently.)
+3. **`get_index`** -- add a monthly branch ahead of the existing climatology lookup
+   (`loader.py:1036-1039`):
+   ```python
+   if self.monthly:
+       (year, month), _ = month_frame(date, self.step_minutes)
+       climatology = self.background[(year, month)][date.day - 1, ...]
+   elif self.time_freq == "6H":
+       climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
+   else:
+       climatology = self.climatology[0, date.dayofyear - 1, ...]
+   ```
+Reuses `_month_keys`, `days_in_month`. No change to `climatology_channels` semantics (still feeds
+`expected_in_channels`).
+
+### Normalization (DECIDED) and remaining data choices
+- **Normalized with the TARGET mean/std.** The background is fed normalized:
+  `norm_background = (background - target_mean) / target_std`, using the **5-channel
+  `rtma_ok_sfc` target** mean/std -- **NOT** the HadISD observation normalization (review point 5;
+  see `note_climatology_normalization.md`). Preferred: bake this in at **build time** (store the
+  already-normalized field; loader unchanged, file self-describing). Alternative: one-line loader
+  normalization with `self.means/self.stds` on the monthly path.
+- **File name / token:** `background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap` (keep the target/obs
+  `<YYYY>-<MM>` convention).
+- **Background lead time:** which forecast lead defines the 00z background -- a data-prep choice;
+  does not affect the loader.
+
+### Alignment assert
+Same discipline as obs/target: assert each background month file has exactly `days_in_month`
+frames so a missing/short month fails loudly rather than mis-indexing the day.
+
 ## Implementation status (done, untested)
 
 Implemented and gated behind `self.monthly = (obs_set=="rtma_surface" and time_freq=="15min")`
@@ -176,6 +252,29 @@ so all existing `all`/6H/1D paths are byte-identical:
 required: `era5/era5_rtma_ok_sfc_1_15min_<YYYY>-<MM>.memmap`,
 `hadisd_processed/{var}_vals_<YYYY>-<MM>.memmap` (+ static `{var}_lon/lat/alt_train.npy`),
 5-channel `mean/std_rtma_ok_sfc_1.npy`, and a daily `climatology_data.mmap`.
+
+## Data contract (preprocessing MUST match the loader)
+
+The loader hard-asserts these on load; **preprocessing must produce -- and ideally verify -- the
+same** so a mismatch is caught at build time, not just at run time. (Review point 4.)
+
+| Artifact | Path (relative to data_path) | dtype | Per-frame shape | Frames per month |
+|---|---|---|---|---|
+| Target | `era5/era5_<era5_mode>_1_15min_<YYYY>-<MM>.memmap` | float32 | `(C_target, nlon, nlat)` | `days_in_month * 96` |
+| Obs (per var) | `hadisd_processed/{var}_vals_<YYYY>-<MM>.memmap` | float32 | `(n_stations,)` | `days_in_month * 96` |
+| 00z background | `era5/background_<era5_mode>_1_<YYYY>-<MM>.memmap` | float32 | `(C_target, nlon, nlat)` | `days_in_month` (1/day) |
+
+Conventions:
+- `<MM>` is **zero-padded** (`01`..`12`); `<YYYY>-<MM>` identical for obs, target, background.
+- **Frame 0 of each month = day 1, 00:00**; cadence exactly 15 min, ascending, no gaps.
+- Target/obs/background **channel order is identical** (the 5 surface fields, same order as obs).
+- Obs station **coords are static** single files (`{var}_lon/lat/alt_train.npy`), NOT per-month.
+- Background is the **00z field per actual day**, stored **normalized** with the target mean/std.
+- `era5_mode = rtma_ok_sfc` (channel count inferred from file size by the loader).
+
+Loader-side checks already enforce the frame counts (`days_in_month * 96` for obs/target;
+`days_in_month` for the background) and reject cadence-misaligned timestamps. Mirroring the same
+frame-count check in the preprocessing scripts is recommended.
 
 ## Related
 

@@ -219,21 +219,27 @@ class WeatherDataset(Dataset):
         xx, yy = torch.meshgrid(self.era5_x[0], self.era5_x[1])
         self.era5_lonlat = torch.stack([xx, yy])
 
-        # Climatology
-        climatology_path = self.data_path + "era5/climatology_data.mmap"
-        if not os.path.exists(climatology_path):
-            climatology_path = self.data_path + "climatology_data.mmap"
-        self.climatology_shape = get_climatology_shape(
-            climatology_path, self.nlon, self.nlat
-        )
-        self.climatology_channels = self.climatology_shape[2]
-        self.climatology_path = climatology_path
-        self.climatology = np.memmap(
-            climatology_path,
-            dtype="float32",
-            mode="r",
-            shape=self.climatology_shape,
-        )
+        # Climatology slot. On the rtma_surface 15-min path this slot is fed a NORMALIZED daily
+        # 00z BACKGROUND/prior (date-specific, NOT a multi-year climatology) from per-month files;
+        # otherwise it is the conventional multi-year day-of-year climatology.
+        if self.monthly:
+            self.background = self._load_background_monthly()
+            self.climatology_channels = self._background_channels
+        else:
+            climatology_path = self.data_path + "era5/climatology_data.mmap"
+            if not os.path.exists(climatology_path):
+                climatology_path = self.data_path + "climatology_data.mmap"
+            self.climatology_shape = get_climatology_shape(
+                climatology_path, self.nlon, self.nlat
+            )
+            self.climatology_channels = self.climatology_shape[2]
+            self.climatology_path = climatology_path
+            self.climatology = np.memmap(
+                climatology_path,
+                dtype="float32",
+                mode="r",
+                shape=self.climatology_shape,
+            )
 
         # Setup normalisation factors
         if self.diff:
@@ -648,7 +654,60 @@ class WeatherDataset(Dataset):
                 mode="r",
                 shape=(frames_expected, channels, self.nlon, self.nlat),
             )
+        self.era5_channels = channels  # used to cross-check the 00z background channel count
         return era5
+
+    def _background_month_path(self, year, month):
+        return os.path.join(
+            self.data_path,
+            "era5",
+            f"background_{self.era5_mode}_1_{year}-{month:02d}.memmap",
+        )
+
+    def _load_background_monthly(self):
+        """Open per-month daily 00z BACKGROUND memmaps keyed by (year, month).
+
+        This populates the encoder's "climatology" input slot on the rtma_surface 15-min path,
+        but it is a date-specific daily 00z background/prior -- NOT a multi-year climatology.
+        Each month is ``(days_in_month, C, nlon, nlat)`` with ONE 00z frame per day. The field is
+        expected to be **already normalized at build time with the TARGET mean/std** (loader
+        feeds it as-is, like the climatology slot today). Hard-asserts (review point 6):
+        frames == days_in_month, C == target channels, spatial == (nlon, nlat).
+        """
+        background = {}
+        target_channels = getattr(self, "era5_channels", None)
+        per_frame = self.nlon * self.nlat * 4
+        channels = None
+        for (year, month) in self._month_keys():
+            path = self._background_month_path(year, month)
+            nbytes = os.path.getsize(path)
+            days = days_in_month(year, month)
+            if channels is None:
+                denom = days * per_frame
+                if denom == 0 or nbytes % denom != 0:
+                    raise ValueError(
+                        f"{path}: size {nbytes} not divisible by (days*nlon*nlat*4)={denom} "
+                        f"(days={days}, nlon={self.nlon}, nlat={self.nlat})"
+                    )
+                channels = nbytes // denom
+                if target_channels is not None and channels != target_channels:
+                    raise AssertionError(
+                        f"{path}: background channels {channels} != target channels "
+                        f"{target_channels}; the 00z background must match the target fields"
+                    )
+            if nbytes != days * channels * per_frame:
+                raise AssertionError(
+                    f"{path}: {nbytes // (channels * per_frame)} frames != expected {days} "
+                    "(days_in_month); the 00z background must have exactly one frame per day"
+                )
+            background[(year, month)] = np.memmap(
+                path,
+                dtype="float32",
+                mode="r",
+                shape=(days, channels, self.nlon, self.nlat),
+            )
+        self._background_channels = channels
+        return background
 
     def _load_obs_monthly(self, var, stations):
         """Open per-month surface-obs value memmaps for one variable, keyed by (year, month).
@@ -1033,7 +1092,11 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         # AUxiliary variables
         aux_time = self.to_tensor(self.get_time_aux(date))
-        if self.time_freq == "6H":
+        if self.monthly:
+            # Normalized daily 00z background/prior (reuses the climatology slot; NOT a multi-year
+            # climatology). All 96 intraday samples of a day share that day's 00z field.
+            climatology = self.background[(date.year, date.month)][date.day - 1, ...]
+        elif self.time_freq == "6H":
             climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
         else:
             climatology = self.climatology[0, date.dayofyear - 1, ...]
