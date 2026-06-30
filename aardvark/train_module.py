@@ -465,7 +465,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--era5_mode",
         default="4u_sfc",
-        choices=["4u", "sfc", "4u_sfc"],
+        choices=["4u", "sfc", "4u_sfc", "rtma_ok_sfc"],
     )
     parser.add_argument("--weight_decay", type=float, default=1e-6)
     parser.add_argument(

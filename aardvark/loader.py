@@ -108,7 +108,18 @@ class WeatherDataset(Dataset):
         # "all" = full Aardvark set; "rtma_surface" = surface obs only (tas, sh, psl, u, v).
         self.obs_set = obs_set
         self.surface_only = obs_set == "rtma_surface"
-        self.offsets = build_offsets(self.time_freq)
+        # Per-month file layout (ERA5-type indexing) for the RTMA surface 15-min path. When
+        # active, obs and target are stored one file per month and addressed by month_frame();
+        # the offset machinery (build_offsets) is bypassed -- alignment is deterministic.
+        self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(self.time_freq)
+        self.monthly = self.surface_only and self.time_freq == "15min"
+        # 15-min is only wired through the per-month rtma_surface path; other obs sets still use
+        # the global-obs/offset logic and have no 15-min layout. Fail clearly rather than later.
+        if self.time_freq == "15min" and not self.monthly:
+            raise ValueError(
+                "time_freq=15min is currently supported only with --obs_set rtma_surface"
+            )
+        self.offsets = None if self.monthly else build_offsets(self.time_freq)
 
         # Data/target grid (Grid A) size, derived from the canonical grid files. Set before
         # any modality loading so the observation/ERA5 memmap shapes and the elevation/grid
@@ -128,12 +139,14 @@ class WeatherDataset(Dataset):
                 f"[WARN] Empty date index: start={self.start_date} end={self.end_date} "
                 f"time_freq={self.time_freq} filter_dates={self.filter_dates}"
             )
-        for key, mapping in self.offsets.items():
-            if self.start_date not in mapping:
-                print(
-                    f"[WARN] start_date {self.start_date} not in offsets for {key}; "
-                    "dataset may be empty or misaligned."
-                )
+        # offsets is None on the per-month path (alignment is deterministic, no offset table).
+        if self.offsets is not None:
+            for key, mapping in self.offsets.items():
+                if self.start_date not in mapping:
+                    print(
+                        f"[WARN] start_date {self.start_date} not in offsets for {key}; "
+                        "dataset may be empty or misaligned."
+                    )
 
         # Load the input modalities. For obs_set="rtma_surface" only the surface obs
         # (HadISD per-variable path) are loaded; the global modalities are skipped -- required
@@ -168,10 +181,14 @@ class WeatherDataset(Dataset):
 
         # Load the ground truth data for training
         print("Loading ERA5")
-        self.era5_sfc = [
-            self.load_era5(year)
-            for year in range(int(start_date[:4]), int(end_date[:4]) + 1)
-        ]
+        if self.monthly:
+            # Per-month target files keyed by (year, month); see _load_era5_monthly.
+            self.era5_sfc = self._load_era5_monthly()
+        else:
+            self.era5_sfc = [
+                self.load_era5(year)
+                for year in range(int(start_date[:4]), int(end_date[:4]) + 1)
+            ]
 
         # Internal grid to longitude latitude correspondence
         self.era5_x = [
@@ -584,6 +601,81 @@ class WeatherDataset(Dataset):
 
         return
 
+    def _month_keys(self):
+        """List of (year, month) tuples spanned by the run's date range (per-month files)."""
+        periods = pd.period_range(self.start_date, self.end_date, freq="M")
+        return [(p.year, p.month) for p in periods]
+
+    def _era5_month_path(self, year, month):
+        return os.path.join(
+            self.data_path,
+            "era5",
+            f"era5_{self.era5_mode}_1_{self.freq_tag}_{year}-{month:02d}.memmap",
+        )
+
+    def _load_era5_monthly(self):
+        """Open per-month ERA5 target memmaps keyed by (year, month).
+
+        Channel count is inferred once from the first month (assuming its frame count is
+        correct), then EVERY month's frame count is hard-asserted to
+        ``days_in_month * frames_per_day`` so a missing/partial month fails loudly rather than
+        silently shifting rows (obs/target alignment depends on it).
+        """
+        era5 = {}
+        channels = None
+        per_frame = self.nlon * self.nlat * 4
+        for (year, month) in self._month_keys():
+            path = self._era5_month_path(year, month)
+            nbytes = os.path.getsize(path)
+            frames_expected = days_in_month(year, month) * self.frames_per_day
+            if channels is None:
+                denom = frames_expected * per_frame
+                if denom == 0 or nbytes % denom != 0:
+                    raise ValueError(
+                        f"{path}: size {nbytes} not divisible by frame block {denom} "
+                        f"(frames={frames_expected}, nlon={self.nlon}, nlat={self.nlat})"
+                    )
+                channels = nbytes // denom
+            if nbytes != frames_expected * channels * per_frame:
+                raise AssertionError(
+                    f"{path}: {nbytes // (channels * per_frame)} frames != expected "
+                    f"{frames_expected} (days_in_month*{self.frames_per_day}); "
+                    "obs/target alignment requires an exact match"
+                )
+            era5[(year, month)] = np.memmap(
+                path,
+                dtype="float32",
+                mode="r",
+                shape=(frames_expected, channels, self.nlon, self.nlat),
+            )
+        return era5
+
+    def _load_obs_monthly(self, var, stations):
+        """Open per-month surface-obs value memmaps for one variable, keyed by (year, month).
+
+        Each month file is ``(days_in_month * frames_per_day, stations)``; the frame count is
+        hard-asserted so obs and target stay aligned.
+        """
+        out = {}
+        per_frame = stations * 4
+        for (year, month) in self._month_keys():
+            path = os.path.join(
+                self.data_path,
+                "hadisd_processed",
+                f"{var}_vals_{year}-{month:02d}.memmap",
+            )
+            nbytes = os.path.getsize(path)
+            frames_expected = days_in_month(year, month) * self.frames_per_day
+            if nbytes != frames_expected * per_frame:
+                raise AssertionError(
+                    f"{path}: {nbytes // per_frame} frames != expected {frames_expected} "
+                    f"(days_in_month*{self.frames_per_day}); check the 15-min month file"
+                )
+            out[(year, month)] = np.memmap(
+                path, dtype="float32", mode="r", shape=(frames_expected, stations)
+            )
+        return out
+
     def load_hadisd(self, mode):
         """
         Load the HADISD data
@@ -610,27 +702,34 @@ class WeatherDataset(Dataset):
             alt = np.load(
                 self.data_path + "hadisd_processed/{}_alt_{}.npy".format(var, mode)
             )
-            vals_path = (
-                self.data_path + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode)
-            )
-            if self.time_freq == "6H":
-                shape = get_hadisd_shape(mode)
-            else:
+            if self.monthly:
+                # Per-month value files: {var}_vals_<YYYY>-<MM>.memmap. Coords above stay
+                # static (single file); only the values are per-month.
                 stations = lon.shape[0]
-                time_dim = self._infer_time_dim(vals_path, [stations])
-                shape = (time_dim, stations)
-            vals = np.memmap(
-                vals_path,
-                dtype="float32",
-                mode="r",
-                shape=shape,
-            )
+                vals = self._load_obs_monthly(var, stations)
+            else:
+                vals_path = (
+                    self.data_path + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode)
+                )
+                if self.time_freq == "6H":
+                    shape = get_hadisd_shape(mode)
+                else:
+                    stations = lon.shape[0]
+                    time_dim = self._infer_time_dim(vals_path, [stations])
+                    shape = (time_dim, stations)
+                vals = np.memmap(
+                    vals_path,
+                    dtype="float32",
+                    mode="r",
+                    shape=shape,
+                )
 
             self.hadisd_x.append(np.stack([lon, lat], axis=-1) / LATLON_SCALE_FACTOR)
             self.hadisd_alt.append(alt)
             self.hadisd_y.append(vals)
 
-        self.hadisd_index_offset = self.offsets["hadisd"][self.start_date]
+        if not self.monthly:
+            self.hadisd_index_offset = self.offsets["hadisd"][self.start_date]
 
         self.hadisd_means = [
             self.to_tensor(
@@ -666,7 +765,9 @@ class WeatherDataset(Dataset):
             levels = 4
         elif self.era5_mode == "13u":
             levels = 69
-        elif self.era5_mode == "4u_sfc":
+        elif self.era5_mode in ("4u_sfc", "rtma_ok_sfc"):
+            # rtma_ok_sfc = RTMA OK Phase 1 surface target (5 channels); channel count is
+            # inferred from the memmap file size rather than hard-coded.
             levels = None
         else:
             levels = 24
@@ -722,7 +823,9 @@ class WeatherDataset(Dataset):
 
         doy = current_date.dayofyear
         year = (current_date.year - 2007) / 15
-        time_of_day = current_date.hour
+        # Fractional hour so sub-hourly (e.g. 15-min) steps are distinguishable. Backward
+        # compatible: 6H/1D timestamps have minute==0, so this equals the integer hour.
+        time_of_day = current_date.hour + current_date.minute / 60
         return np.array(
             [
                 np.cos(np.pi * 2 * doy / DAYS_IN_YEAR),
@@ -781,6 +884,11 @@ class WeatherDatasetAssimilation(WeatherDataset):
         self.var_end = var_end
         self.diff = diff
         self.two_frames = two_frames
+        if getattr(self, "monthly", False) and self.two_frames:
+            raise NotImplementedError(
+                "monthly per-month files (rtma_surface + 15min) do not support two_frames: "
+                "the two-frame / year-boundary path assumes per-year ERA5 memmaps."
+            )
 
     def load_era5_time(self, index):
         """
@@ -788,14 +896,16 @@ class WeatherDatasetAssimilation(WeatherDataset):
         """
 
         date = self.dates[index]
-        year = date.year
-        if self.time_freq == "6H":
-            hour = date.hour
-            doy = (date.dayofyear - 1) * 4 + (hour // 6)
+        if self.monthly:
+            (year, month), frame_in_month = month_frame(date, self.step_minutes)
+            era5 = self.era5_sfc[(year, month)][frame_in_month, ...]
         else:
-            doy = date.dayofyear - 1
-
-        era5 = self.era5_sfc[year - int(self.start_date[:4])][doy, ...]
+            year = date.year
+            if self.time_freq == "6H":
+                doy = (date.dayofyear - 1) * 4 + (date.hour // 6)
+            else:
+                doy = date.dayofyear - 1
+            era5 = self.era5_sfc[year - int(self.start_date[:4])][doy, ...]
         era5 = np.copy(era5)
         if not getattr(self, "_debug_era5_shapes", False):
             print(
@@ -901,9 +1011,17 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         # HadISD (always loaded -- the surface obs used by both obs_set modes)
         x_context_hadisd = self.hadisd_x
-        y_context_hadisd = [
-            i[index + self.hadisd_index_offset, :] for i in self.hadisd_y
-        ]
+        if self.monthly:
+            # Per-month values: each hadisd_y entry is a {(year, month): memmap} dict; read the
+            # SAME (month, frame) the target uses so obs and target stay aligned.
+            (m_year, m_month), frame_in_month = month_frame(date, self.step_minutes)
+            y_context_hadisd = [
+                v[(m_year, m_month)][frame_in_month, :] for v in self.hadisd_y
+            ]
+        else:
+            y_context_hadisd = [
+                i[index + self.hadisd_index_offset, :] for i in self.hadisd_y
+            ]
         x_context_hadisd = [self.to_tensor(i).permute(1, 0) for i in x_context_hadisd]
         y_context_hadisd = [self.to_tensor(i) for i in y_context_hadisd]
         y_context_hadisd = self.norm_hadisd(y_context_hadisd)
@@ -1347,7 +1465,9 @@ class WeatherDatasetDownscaling(Dataset):
             levels = 4
         elif self.era5_mode == "13u":
             levels = 69
-        elif self.era5_mode == "4u_sfc":
+        elif self.era5_mode in ("4u_sfc", "rtma_ok_sfc"):
+            # rtma_ok_sfc = RTMA OK Phase 1 surface target (5 channels); channel count is
+            # inferred from the memmap file size rather than hard-coded.
             levels = None
         else:
             levels = 24
@@ -1399,7 +1519,9 @@ class WeatherDatasetDownscaling(Dataset):
 
         doy = current_date.dayofyear
         year = (current_date.year - 2007) / 15
-        time_of_day = current_date.hour
+        # Fractional hour so sub-hourly (e.g. 15-min) steps are distinguishable. Backward
+        # compatible: 6H/1D timestamps have minute==0, so this equals the integer hour.
+        time_of_day = current_date.hour + current_date.minute / 60
         return np.array(
             [
                 np.cos(np.pi * 2 * doy / DAYS_IN_YEAR),
@@ -1625,7 +1747,9 @@ class ForecasterDatasetDownscaling(Dataset):
         current_date = (self.dates + self.offset)[index]
         doy = current_date.dayofyear
         year = (current_date.year - 2007) / 15
-        time_of_day = current_date.hour
+        # Fractional hour so sub-hourly (e.g. 15-min) steps are distinguishable. Backward
+        # compatible: 6H/1D timestamps have minute==0, so this equals the integer hour.
+        time_of_day = current_date.hour + current_date.minute / 60
         return np.array(
             [
                 np.cos(np.pi * 2 * doy / DAYS_IN_YEAR),
@@ -1992,7 +2116,9 @@ class ForecastLoader(Dataset):
             levels = 4
         elif self.era5_mode == "13u":
             levels = 69
-        elif self.era5_mode == "4u_sfc":
+        elif self.era5_mode in ("4u_sfc", "rtma_ok_sfc"):
+            # rtma_ok_sfc = RTMA OK Phase 1 surface target (5 channels); channel count is
+            # inferred from the memmap file size rather than hard-coded.
             levels = None
         else:
             levels = 24

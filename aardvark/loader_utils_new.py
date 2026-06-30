@@ -1,9 +1,59 @@
+import calendar
+
 import numpy as np
 import torch
 import pandas as pd
 
 LATLON_SCALE_FACTOR = 360
 DAYS_IN_YEAR = 366
+
+# time_freq -> (step_minutes, frames_per_day, freq_tag). Single source of truth that replaces
+# the old "6H vs daily" binary; extend here to add a new cadence.
+TIME_FREQ_TABLE = {
+    "6H": (360, 4, "6"),
+    "1D": (1440, 1, "1d"),
+    "15min": (15, 96, "15min"),
+}
+
+
+def parse_time_freq(time_freq):
+    """Return (step_minutes, frames_per_day, freq_tag) for a supported time_freq string."""
+    try:
+        return TIME_FREQ_TABLE[time_freq]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported time_freq {time_freq!r}; expected one of {list(TIME_FREQ_TABLE)}"
+        )
+
+
+def days_in_month(year, month):
+    """Number of days in a calendar month (handles leap years)."""
+    return calendar.monthrange(year, month)[1]
+
+
+def month_frame(date, step_minutes):
+    """Map a timestamp to ((year, month), frame_in_month) for per-month memmap files.
+
+    Frames are 0-based within the month at ``step_minutes`` cadence:
+    ``frame_in_month = (day-1)*frames_per_day + (hour*60+minute)//step_minutes``.
+    The SAME result indexes both the obs and the target month files, which is what
+    guarantees obs/target alignment.
+
+    Rejects timestamps not aligned to ``step_minutes`` (e.g. 13:37 with a 15-min cadence):
+    integer division would silently snap it to the wrong row and misalign obs vs. target, so a
+    misaligned start/end date must fail loudly instead.
+    """
+    minutes = date.hour * 60 + date.minute
+    if minutes % step_minutes != 0:
+        raise ValueError(
+            f"timestamp {date} is not aligned to a {step_minutes}-minute cadence "
+            f"(minute-of-day {minutes} mod {step_minutes} != 0); per-month files require exact "
+            "alignment -- check the run's start/end dates."
+        )
+    frames_per_day = 1440 // step_minutes
+    frame_in_day = minutes // step_minutes
+    frame_in_month = (date.day - 1) * frames_per_day + frame_in_day
+    return (date.year, date.month), frame_in_month
 
 DAILY_SCALE_FACTOR = {
     "ERA5": 4,
