@@ -108,16 +108,19 @@ class WeatherDataset(Dataset):
         # "all" = full Aardvark set; "rtma_surface" = surface obs only (tas, sh, psl, u, v).
         self.obs_set = obs_set
         self.surface_only = obs_set == "rtma_surface"
-        # Per-month file layout (ERA5-type indexing) for the RTMA surface 15-min path. When
-        # active, obs and target are stored one file per month and addressed by month_frame();
-        # the offset machinery (build_offsets) is bypassed -- alignment is deterministic.
+        # Per-month file layout (ERA5-type indexing) for the RTMA surface sub-daily paths (15-min
+        # and 1-hour). When active, obs and target are stored one file per month and addressed by
+        # month_frame(); the offset machinery (build_offsets) is bypassed -- alignment is
+        # deterministic. All per-month files carry the cadence via freq_tag so 15-min and 1-hour
+        # datasets can coexist in one data_path.
         self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(self.time_freq)
-        self.monthly = self.surface_only and self.time_freq == "15min"
-        # 15-min is only wired through the per-month rtma_surface path; other obs sets still use
-        # the global-obs/offset logic and have no 15-min layout. Fail clearly rather than later.
-        if self.time_freq == "15min" and not self.monthly:
+        self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
+        # The sub-daily cadences are only wired through the per-month rtma_surface path; other obs
+        # sets still use the global-obs/offset logic and have no per-month layout. Fail clearly.
+        if self.time_freq in ("15min", "1H") and not self.monthly:
             raise ValueError(
-                "time_freq=15min is currently supported only with --obs_set rtma_surface"
+                f"time_freq={self.time_freq} is currently supported only with "
+                "--obs_set rtma_surface"
             )
         self.offsets = None if self.monthly else build_offsets(self.time_freq)
 
@@ -721,14 +724,14 @@ class WeatherDataset(Dataset):
             path = os.path.join(
                 self.data_path,
                 "hadisd_processed",
-                f"{var}_vals_{year}-{month:02d}.memmap",
+                f"{var}_vals_{self.freq_tag}_{year}-{month:02d}.memmap",
             )
             nbytes = os.path.getsize(path)
             frames_expected = days_in_month(year, month) * self.frames_per_day
             if nbytes != frames_expected * per_frame:
                 raise AssertionError(
                     f"{path}: {nbytes // per_frame} frames != expected {frames_expected} "
-                    f"(days_in_month*{self.frames_per_day}); check the 15-min month file"
+                    f"(days_in_month*{self.frames_per_day}); check the per-month obs file"
                 )
             out[(year, month)] = np.memmap(
                 path, dtype="float32", mode="r", shape=(frames_expected, stations)
@@ -762,8 +765,9 @@ class WeatherDataset(Dataset):
                 self.data_path + "hadisd_processed/{}_alt_{}.npy".format(var, mode)
             )
             if self.monthly:
-                # Per-month value files: {var}_vals_<YYYY>-<MM>.memmap. Coords above stay
-                # static (single file); only the values are per-month.
+                # Per-month value files: {var}_vals_<freq_tag>_<YYYY>-<MM>.memmap (freq_tag is
+                # "15min" or "1h"). Coords above stay static (single file); only the values are
+                # per-month.
                 stations = lon.shape[0]
                 vals = self._load_obs_monthly(var, stations)
             else:
