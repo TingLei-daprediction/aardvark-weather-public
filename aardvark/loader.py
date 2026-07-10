@@ -210,12 +210,26 @@ class WeatherDataset(Dataset):
             (self.nlon, self.nlat),
         )
 
-        # Orography. Raw file convention is (channels, nlat, nlon); after permute/flip the
-        # loader tensor is (channels, nlon, nlat).
+        # Orography. Raw file convention is (channels, nlat, nlon) with BOTH axes ascending
+        # (SW origin, as scripts/build_elev_vars.py writes); the permute brings it to the loader
+        # convention (channels, nlon, nlat) shared by target/climatology/setconv encodings. No
+        # lat flip: the old flip assumed an ERA5-native north-to-south raw file and produced a
+        # N-S mirrored field for SW-origin files.
         raw_elev = np.load(elev_vars_path(self.data_path))
         assert_grid_match("elev_vars (raw)", raw_elev.shape[1:], (self.nlat, self.nlon))
-        self.era5_elev = self.to_tensor(raw_elev)
-        self.era5_elev = torch.flip(self.era5_elev.permute(0, 2, 1), [-1])
+        # Orientation check -- the shape assert alone cannot catch a N-S mirrored file with the
+        # same shape. Channel 2 is sin(latitude), so every column must equal sin of the
+        # ascending lat axis; a flipped file fails immediately.
+        expected_sin_lat = np.sin(
+            np.deg2rad(np.load(loader_grid_y_path(self.data_path)))
+        ).astype("float32")
+        if not np.allclose(raw_elev[2, :, 0], expected_sin_lat, atol=1e-5):
+            raise ValueError(
+                "elev_vars channel 2 (sin latitude) does not match sin(era5_y): the static "
+                "file is N-S flipped or built on a different grid; rebuild it with "
+                "scripts/build_elev_vars.py (SW origin, lat ascending, shape (4, nlat, nlon))."
+            )
+        self.era5_elev = self.to_tensor(raw_elev).permute(0, 2, 1)
         assert_grid_match(
             "era5_elev (loader)", self.era5_elev.shape[1:], (self.nlon, self.nlat)
         )

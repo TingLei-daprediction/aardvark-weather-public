@@ -362,11 +362,12 @@ class ConvCNPWeather(nn.Module):
         if self.mode == "assimilation":
 
             self.int_grid = [i.to(task["y_target"].device) for i in self.int_grid]
-            elev = nn.functional.interpolate(
-                torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2]),
-                size=(self.int_grid[0].shape[1], self.int_grid[1].shape[1]),
-            )
-#cltorg bug            elev = torch.flip(task["era5_elev_current"].permute(0, 1, 3, 2), dims=[2])
+            # Loader elev is already (B, C, nlon, nlat) on Grid A, SW origin -- the same layout
+            # as the setconv encodings and the climatology/background slot, so it is used as-is.
+            # The old permute+flip+interpolate cancelled the loader's (since removed) lat flip
+            # and then STRETCHED the (lat, lon)-ordered map to (nlon, nlat), feeding the encoder
+            # a transposed elevation field.
+            elev = task["era5_elev_current"]
 
             def igra_encoding(prefix):
                 if f"igra_{prefix}" in task and f"igra_x_{prefix}" in task:

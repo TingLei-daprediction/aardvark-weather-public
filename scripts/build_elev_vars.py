@@ -7,7 +7,9 @@ Standard (approximate) definition used here:
   3) sin(latitude)
   4) cos(latitude)
 
-Output: era5/elev_vars_1.npy with shape (4, lat, lon)
+Output: era5/elev_vars_<tag>.npy with shape (4, nlat, nlon), BOTH axes ascending (SW origin:
+row 0 = southmost lat, col 0 = westmost lon) -- the orientation the loader expects; it only
+permutes to (4, nlon, nlat), no flips.
 """
 
 import argparse
@@ -21,10 +23,11 @@ G = 9.80665
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Build elev_vars_1.npy from ERA5 static fields")
+    p = argparse.ArgumentParser(description="Build elev_vars_<tag>.npy from ERA5 static fields")
     p.add_argument("--input_file", required=True, help="NetCDF file with geopotential and land_sea_mask")
     p.add_argument("--output_dir", required=True, help="Base output dir (data_path)")
-    p.add_argument("--grid_dir", default="data/grid_lon_lat", help="Dir with era5_x_1.npy and era5_y_1.npy")
+    p.add_argument("--grid_dir", default="data/grid_lon_lat", help="Dir with era5_x_<tag>.npy and era5_y_<tag>.npy")
+    p.add_argument("--tag", default="1", help="Grid tag: reads era5_x/y_<tag>.npy, writes elev_vars_<tag>.npy")
     p.add_argument("--geopotential_var", default="geopotential", help="Variable name for geopotential")
     p.add_argument("--lsm_var", default="land_sea_mask", help="Variable name for land-sea mask")
     return p.parse_args()
@@ -43,8 +46,8 @@ def normalize_and_reindex(ds, lon_tgt, lat_tgt):
 def main():
     args = parse_args()
     grid_dir = Path(args.grid_dir)
-    lon_tgt = np.load(grid_dir / "era5_x_1.npy")
-    lat_tgt = np.load(grid_dir / "era5_y_1.npy")
+    lon_tgt = np.load(grid_dir / f"era5_x_{args.tag}.npy")
+    lat_tgt = np.load(grid_dir / f"era5_y_{args.tag}.npy")
 
     ds = xr.open_dataset(args.input_file)
     ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
@@ -82,8 +85,9 @@ def main():
 
     out_dir = Path(args.output_dir) / "era5"
     out_dir.mkdir(parents=True, exist_ok=True)
-    np.save(out_dir / "elev_vars_1.npy", elev)
-    print(f"Wrote {out_dir / 'elev_vars_1.npy'} with shape {elev.shape}")
+    out_path = out_dir / f"elev_vars_{args.tag}.npy"
+    np.save(out_path, elev)
+    print(f"Wrote {out_path} with shape {elev.shape} (4, nlat, nlon), SW origin")
 
 
 if __name__ == "__main__":
