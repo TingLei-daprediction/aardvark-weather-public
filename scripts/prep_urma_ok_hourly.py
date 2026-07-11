@@ -107,7 +107,15 @@ def parse_args():
         default=None,
         help="Dir for era5_x_<tag>.npy / era5_y_<tag>.npy (default: <output_dir>/era5)",
     )
-    p.add_argument("--grid_tag", default="ok", help="Grid file tag (era5_x_<tag>.npy)")
+    p.add_argument("--grid_tag", default="ok", help="Grid file tag (<name_root>_x_<tag>.npy)")
+    p.add_argument(
+        "--name_root",
+        default="era5",
+        help="Naming token for the output subdir, target prefix and grid-axis prefix "
+        "(default 'era5' for historical consistency; e.g. 'urma' writes "
+        "urma/urma_rtma_ok_sfc_1_1h_....memmap). MUST match the era5_month/background_month/"
+        "grid_files templates in the training grid_config YAML.",
+    )
     p.add_argument(
         "--anl_pattern",
         default="urma2p5.t{hour:02d}z.2dvaranl_OK.grb2",
@@ -152,14 +160,6 @@ def month_range(start, end):
         if m == 13:
             y, m = y + 1, 1
     return out
-
-
-def load_grid(grid_dir, tag):
-    lon = np.load(Path(grid_dir) / f"era5_x_{tag}.npy")
-    lat = np.load(Path(grid_dir) / f"era5_y_{tag}.npy")
-    if not (np.all(np.diff(lon) > 0) and np.all(np.diff(lat) > 0)):
-        raise SystemExit("Grid axes must be ascending (build_grid_lonlat.py convention).")
-    return lon, lat
 
 
 def axes_from_grib(path):
@@ -304,9 +304,9 @@ def prescan(input_dir, months, anl_pattern, ges_pattern, fill_missing):
 def main():
     args = parse_args()
     months = month_range(args.start, args.end)
-    grid_dir = Path(args.grid_dir or os.path.join(args.output_dir, "era5"))
-    x_path = grid_dir / f"era5_x_{args.grid_tag}.npy"
-    y_path = grid_dir / f"era5_y_{args.grid_tag}.npy"
+    grid_dir = Path(args.grid_dir or os.path.join(args.output_dir, args.name_root))
+    x_path = grid_dir / f"{args.name_root}_x_{args.grid_tag}.npy"
+    y_path = grid_dir / f"{args.name_root}_y_{args.grid_tag}.npy"
     if args.grid_source == "grib":
         src = first_existing_anl(args.input_dir, months, args.anl_pattern)
         lon, lat = axes_from_grib(src)
@@ -333,9 +333,11 @@ def main():
                 "for training (assert_grid_files_consistent reads the two copies)"
             )
     else:
-        lon, lat = load_grid(grid_dir, args.grid_tag)
+        lon, lat = np.load(x_path), np.load(y_path)
+        if not (np.all(np.diff(lon) > 0) and np.all(np.diff(lat) > 0)):
+            raise SystemExit("Grid axes must be ascending (build_grid_lonlat.py convention).")
     nlon, nlat = lon.size, lat.size
-    era5_dir = Path(args.output_dir) / "era5"
+    era5_dir = Path(args.output_dir) / args.name_root
     era5_dir.mkdir(parents=True, exist_ok=True)
     print(f"Grid: nlon={nlon} lon {lon[0]:.4f}..{lon[-1]:.4f}, nlat={nlat} lat {lat[0]:.4f}..{lat[-1]:.4f}")
 
@@ -348,7 +350,7 @@ def main():
 
     for year, month in months:
         days = calendar.monthrange(year, month)[1]
-        tgt_path = era5_dir / f"era5_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
+        tgt_path = era5_dir / f"{args.name_root}_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
         bg_path = era5_dir / f"background_raw_{ERA5_MODE}_1_{year}-{month:02d}.memmap"
         tgt = np.memmap(tgt_path, dtype="float32", mode="w+", shape=(days * FRAMES_PER_DAY, CHANNELS, nlon, nlat))
         bg = np.memmap(bg_path, dtype="float32", mode="w+", shape=(days, CHANNELS, nlon, nlat))

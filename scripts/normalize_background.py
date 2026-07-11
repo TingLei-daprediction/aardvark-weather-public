@@ -15,6 +15,11 @@ Layout (one 00z frame per day, same channels/order as the target):
 The loader (WeatherDataset._load_background_monthly) reads the OUTPUT files as-is and hard-asserts
 frames == days_in_month and channels == target channels.
 
+Also writes the RAW background's own per-channel stats (diagnostic; the loader does not read
+them -- normalization uses the TARGET mean/std by design):
+  <data_dir>/norm_factors/mean_background_<era5_mode>_1.npy, std_background_<era5_mode>_1.npy
+Comparing them with mean/std_<era5_mode>_1.npy shows the background/analysis offset (bias).
+
 Example:
   python scripts/normalize_background.py --data_dir /path/aardvark-data-ok \
       --era5_mode rtma_ok_sfc --months 2019-01 2019-02 2019-03
@@ -51,13 +56,19 @@ def parse_args():
     p.add_argument("--months", nargs="*", default=[], help="Explicit YYYY-MM list (overrides --years)")
     p.add_argument("--raw_name", default="background_raw", help="Raw input file stem")
     p.add_argument("--out_name", default="background", help="Output file stem (loader expects 'background')")
+    p.add_argument(
+        "--subdir",
+        default="era5",
+        help="Subdir under data_dir holding the background memmaps (the naming token; must "
+        "match the background_month template in the training grid_config YAML)",
+    )
     return p.parse_args()
 
 
 def main():
     args = parse_args()
     base = Path(args.data_dir)
-    era5_dir = base / "era5"
+    era5_dir = base / args.subdir
     nf = base / "norm_factors"
 
     mean = np.load(nf / f"mean_{args.era5_mode}_1.npy").astype(np.float32).reshape(-1)
@@ -71,6 +82,11 @@ def main():
     months = parse_months(args.years, args.months)
     if not months:
         raise SystemExit("Provide --months YYYY-MM ... or --years ...")
+
+    # Raw-background stats (diagnostic; float64 running sums, same scheme as the target norms)
+    bg_sum = np.zeros(C, dtype=np.float64)
+    bg_sumsq = np.zeros(C, dtype=np.float64)
+    bg_count = 0
 
     for (year, month) in months:
         tag = f"{year}-{month:02d}"
@@ -90,10 +106,28 @@ def main():
         spatial = nbytes // denom  # nlon*nlat, kept flat (per-channel norm needs no split)
         raw = np.memmap(raw_path, dtype="float32", mode="r", shape=(days, C, spatial))
         out = np.memmap(out_path, dtype="float32", mode="w+", shape=(days, C, spatial))
-        out[:] = (np.asarray(raw, dtype=np.float32) - mean[None, :, None]) / std[None, :, None]
+        raw_arr = np.asarray(raw, dtype=np.float32)
+        out[:] = (raw_arr - mean[None, :, None]) / std[None, :, None]
         out.flush()
+        bg_sum += raw_arr.sum(axis=(0, 2), dtype=np.float64)
+        bg_sumsq += np.square(raw_arr, dtype=np.float64).sum(axis=(0, 2))
+        bg_count += days * spatial
         del raw, out
         print(f"wrote {out_path}  (days={days}, C={C}, spatial={spatial})")
+
+    if bg_count:
+        bg_mean = bg_sum / bg_count
+        bg_std = np.sqrt(np.clip(bg_sumsq / bg_count - np.square(bg_mean), 0, None)) + 1e-8
+        bg_mean_path = nf / f"mean_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
+        bg_std_path = nf / f"std_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
+        np.save(bg_mean_path, bg_mean)
+        np.save(bg_std_path, bg_std)
+        print(f"wrote {bg_mean_path} and {bg_std_path} (RAW background stats, diagnostic):")
+        for c in range(C):
+            print(
+                f"  ch{c}: bg mean={bg_mean[c]:.6g} std={bg_std[c]:.6g}  |  "
+                f"target mean={mean[c]:.6g} std={std[c]:.6g}"
+            )
 
 
 if __name__ == "__main__":

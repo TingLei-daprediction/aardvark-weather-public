@@ -16,6 +16,8 @@ from grid_config import (
     norm_mean_path,
     norm_std_path,
     era5_memmap_path,
+    era5_month_path,
+    background_month_path,
 )
 
 
@@ -630,11 +632,9 @@ class WeatherDataset(Dataset):
         return [(p.year, p.month) for p in periods]
 
     def _era5_month_path(self, year, month):
-        return os.path.join(
-            self.data_path,
-            "era5",
-            f"era5_{self.era5_mode}_1_{self.freq_tag}_{year}-{month:02d}.memmap",
-        )
+        # Name comes from the grid-config "era5_month" template (override in the YAML to
+        # rename the "era5" dir/prefix for a regional dataset).
+        return era5_month_path(self.data_path, self.era5_mode, self.freq_tag, year, month)
 
     def _load_era5_monthly(self):
         """Open per-month ERA5 target memmaps keyed by (year, month).
@@ -675,11 +675,8 @@ class WeatherDataset(Dataset):
         return era5
 
     def _background_month_path(self, year, month):
-        return os.path.join(
-            self.data_path,
-            "era5",
-            f"background_{self.era5_mode}_1_{year}-{month:02d}.memmap",
-        )
+        # Name comes from the grid-config "background_month" template (see _era5_month_path).
+        return background_month_path(self.data_path, self.era5_mode, year, month)
 
     def _load_background_monthly(self):
         """Open per-month daily 00z BACKGROUND memmaps keyed by (year, month).

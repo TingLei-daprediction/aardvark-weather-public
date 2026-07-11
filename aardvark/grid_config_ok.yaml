@@ -33,6 +33,12 @@ data_files:
   norm_mean: "norm_factors/mean_{era5_mode}_1.npy"
   norm_std: "norm_factors/std_{era5_mode}_1.npy"
   era5_memmap: "era5/era5_{era5_mode}_1_{freq}_{year}.memmap"
+  # Per-month files (sub-daily rtma_surface path). The "era5" dir/prefix token is only a
+  # naming convention inherited from the global setup; to rename (e.g. to "urma"), change it
+  # here AND in grid_files above AND regenerate/rename the data (prep_urma_ok_hourly.py
+  # --name_root urma writes matching names).
+  era5_month: "era5/era5_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap"
+  background_month: "era5/background_{era5_mode}_1_{year}-{month:02d}.memmap"
   lat_weights: "lat_weights/weights_lat_ok.npy"
 
 # Inner ViT grid (Grid B): even and >= data-grid (nlon=322, nlat=161).

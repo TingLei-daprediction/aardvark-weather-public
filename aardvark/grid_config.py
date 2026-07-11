@@ -37,13 +37,18 @@ DEFAULT_GRID_CONFIG = {
         "model_x": "grid_lon_lat/era5_x_1.npy",
         "model_y": "grid_lon_lat/era5_y_1.npy",
     },
-    # Other grid/domain-dependent data files. {era5_mode}, {freq}, {year} are substituted at
-    # runtime. Defaults reproduce the original names.
+    # Other grid/domain-dependent data files. {era5_mode}, {freq}, {year}, {month} are
+    # substituted at runtime. Defaults reproduce the original names. The "era5" directory /
+    # file-name token is purely conventional -- override these templates (e.g. in a regional
+    # YAML) to rename it; the loader has no other hard-wired "era5" paths on the target side.
     "data_files": {
         "elev_vars": "era5/elev_vars_1.npy",
         "norm_mean": "norm_factors/mean_{era5_mode}_1.npy",
         "norm_std": "norm_factors/std_{era5_mode}_1.npy",
         "era5_memmap": "era5/era5_{era5_mode}_1_{freq}_{year}.memmap",
+        # Per-month files used by the sub-daily (monthly) rtma_surface path.
+        "era5_month": "era5/era5_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap",
+        "background_month": "era5/background_{era5_mode}_1_{year}-{month:02d}.memmap",
         "lat_weights": "lat_weights/weights_lat_1.npy",
     },
     "int_x": 256,
@@ -138,6 +143,16 @@ def norm_std_path(root, era5_mode):
 
 def era5_memmap_path(data_path, era5_mode, freq, year):
     return _data_file(data_path, "era5_memmap", era5_mode=era5_mode, freq=freq, year=year)
+
+
+def era5_month_path(data_path, era5_mode, freq, year, month):
+    return _data_file(
+        data_path, "era5_month", era5_mode=era5_mode, freq=freq, year=year, month=month
+    )
+
+
+def background_month_path(data_path, era5_mode, year, month):
+    return _data_file(data_path, "background_month", era5_mode=era5_mode, year=year, month=month)
 
 
 def lat_weights_path(aux_data_path):
