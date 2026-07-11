@@ -50,21 +50,27 @@ EOF
 )
 echo "Months: $months"
 
+# Naming token for the processed files: <data_dir>/urma/urma_rtma_ok_sfc_1_1h_....memmap etc.
+# MUST match the era5_month/background_month/grid_files templates in grid_config_ok.yaml.
+name_root="urma"
+
 # 1. Targets + raw background + norms (+ grid axes as side product).
 #    --write_norms: ONLY because start..end here is the intended TRAINING period.
 python scripts/prep_urma_ok_hourly.py \
   --input_dir "$input_dir" \
   --output_dir "$data_dir" \
   --start "$start" --end "$end" \
+  --name_root "$name_root" \
   --write_norms
 
 # 2. Normalize the 00z background with the target mean/std written in step 1.
 python scripts/normalize_background.py \
   --data_dir "$data_dir" \
   --era5_mode rtma_ok_sfc \
+  --subdir "$name_root" \
   --months $months
 
 echo "Done. Before TRAINING (not part of preprocessing):"
-echo "  - copy $data_dir/era5/era5_x_ok.npy + era5_y_ok.npy to <model_data_path>/grid_lon_lat/"
-echo "  - build elev_vars_ok.npy (scripts/build_elev_vars.py --tag ok)"
+echo "  - copy $data_dir/$name_root/${name_root}_x_ok.npy + ${name_root}_y_ok.npy to <model_data_path>/grid_lon_lat/"
+echo "  - build elev_vars_ok.npy (scripts/build_elev_vars.py --tag ok --name_root $name_root)"
 echo "  - build obs files hadisd_processed/{var}_vals_1h_YYYY-MM.memmap + station coords + hadisd norms"

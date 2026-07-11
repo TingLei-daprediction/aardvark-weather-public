@@ -26,8 +26,14 @@ def parse_args():
     p = argparse.ArgumentParser(description="Build elev_vars_<tag>.npy from ERA5 static fields")
     p.add_argument("--input_file", required=True, help="NetCDF file with geopotential and land_sea_mask")
     p.add_argument("--output_dir", required=True, help="Base output dir (data_path)")
-    p.add_argument("--grid_dir", default="data/grid_lon_lat", help="Dir with era5_x_<tag>.npy and era5_y_<tag>.npy")
-    p.add_argument("--tag", default="1", help="Grid tag: reads era5_x/y_<tag>.npy, writes elev_vars_<tag>.npy")
+    p.add_argument("--grid_dir", default="data/grid_lon_lat", help="Dir with <name_root>_x/y_<tag>.npy")
+    p.add_argument("--tag", default="1", help="Grid tag: reads <name_root>_x/y_<tag>.npy, writes elev_vars_<tag>.npy")
+    p.add_argument(
+        "--name_root",
+        default="era5",
+        help="Naming token: grid files <name_root>_x_<tag>.npy, output subdir <name_root>/ "
+        "(use 'urma' for the OK setup; must match the grid_config YAML templates)",
+    )
     p.add_argument("--geopotential_var", default="geopotential", help="Variable name for geopotential")
     p.add_argument("--lsm_var", default="land_sea_mask", help="Variable name for land-sea mask")
     return p.parse_args()
@@ -46,8 +52,8 @@ def normalize_and_reindex(ds, lon_tgt, lat_tgt):
 def main():
     args = parse_args()
     grid_dir = Path(args.grid_dir)
-    lon_tgt = np.load(grid_dir / f"era5_x_{args.tag}.npy")
-    lat_tgt = np.load(grid_dir / f"era5_y_{args.tag}.npy")
+    lon_tgt = np.load(grid_dir / f"{args.name_root}_x_{args.tag}.npy")
+    lat_tgt = np.load(grid_dir / f"{args.name_root}_y_{args.tag}.npy")
 
     ds = xr.open_dataset(args.input_file)
     ds, lon_name, lat_name = normalize_and_reindex(ds, lon_tgt, lat_tgt)
@@ -83,7 +89,7 @@ def main():
 
     elev = np.stack([orog, lsm, sin_lat, cos_lat], axis=0)
 
-    out_dir = Path(args.output_dir) / "era5"
+    out_dir = Path(args.output_dir) / args.name_root
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"elev_vars_{args.tag}.npy"
     np.save(out_path, elev)
