@@ -10,7 +10,7 @@ interpolation is done here), organized one directory per day:
 Each grib2 file carries the 5 surface fields on a regular lat-lon grid scanned WE:SN
 (lon fastest, south->north), e.g. 331 x 171 for the OK box.
 
-Outputs (the loader's per-month contract for time_freq=1H, see plan_rtma_15min.md):
+Outputs (the loader's per-month contract for time_freq=1H, see docs/plan_rtma_15min.md):
 
   <output_dir>/era5/era5_rtma_ok_sfc_1_1h_<YYYY>-<MM>.memmap
       (days_in_month * 24, 5, nlon, nlat) float32, RAW values

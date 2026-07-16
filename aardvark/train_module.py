@@ -93,7 +93,7 @@ def expected_in_channels_assimilation(
     hirs = 2 * hirs_channels
     sat = 2 * 2
     icoads = 2 * 5
-    hadisd = 2 * 5  # tas, tds, psl, u, v (all 5 HadISD vars now encoded; see plan_hadisd_v_drop.md)
+    hadisd = 2 * 5  # tas, tds, psl, u, v (all 5 HadISD vars now encoded; see docs/plan_hadisd_v_drop.md)
     igra = 0 if disable_igra else 2 * 24
     ascat = ascat_channels
     iasi = iasi_channels
