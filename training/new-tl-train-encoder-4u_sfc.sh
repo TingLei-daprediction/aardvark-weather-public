@@ -20,9 +20,9 @@ source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-en
 set -euo pipefail
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd $rundir
-output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-output-new/encoder/"
-weights_dir="for-checking-point"
-data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/"
+output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output/"
+weights_dir="${output_dir}/checking-point"
+data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data/"
 model_data_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/data/"
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
