@@ -75,6 +75,21 @@ def warn(msg):
     print(f"  [WARN]  {msg}")
 
 
+def missing(what, path):
+    """Report a missing file, hinting at similarly-named files in the same directory."""
+    import difflib
+
+    hint = ""
+    parent = os.path.dirname(path)
+    if os.path.isdir(parent):
+        cands = difflib.get_close_matches(
+            os.path.basename(path), os.listdir(parent), n=3, cutoff=0.5
+        )
+        if cands:
+            hint = f" -- similar names found: {', '.join(cands)}"
+    err(f"{what}: MISSING {path}{hint}")
+
+
 def parse_train_script(path):
     """Extract shell variables and --flag values from the sbatch script."""
     text = open(path).read().replace("\\\n", " ")
@@ -125,7 +140,7 @@ def month_range(d0, d1):
 def check_memmap(path, expected_frames, per_frame_bytes, what):
     """Verify existence and that size == frames * per_frame; return True if usable."""
     if not os.path.isfile(path):
-        err(f"{what}: MISSING {path}")
+        missing(what, path)
         return False
     nbytes = os.path.getsize(path)
     if nbytes != expected_frames * per_frame_bytes:
@@ -222,18 +237,28 @@ def main():
     ep = elev_vars_path(data_path)
     if os.path.isfile(ep):
         elev = np.load(ep)
-        if elev.shape == (4, nlat, nlon):
-            ok(f"elev_vars {elev.shape}")
-        else:
+        if elev.shape != (4, nlat, nlon):
             err(f"elev_vars shape {elev.shape} != (4, {nlat}, {nlon}) [(4, nlat, nlon)]")
+        else:
+            # Same orientation check the loader hard-asserts at startup: channel 2 is
+            # sin(latitude), so a N-S flipped or wrong-grid file fails here, not mid-run.
+            sin_lat = np.sin(np.deg2rad(np.load(loader_grid_y_path(data_path))))
+            if np.allclose(elev[2, :, 0], sin_lat.astype("float32"), atol=1e-5):
+                ok(f"elev_vars {elev.shape}, orientation (sin-lat) verified")
+            else:
+                err(
+                    "elev_vars: sin-latitude channel does not match the grid's lat axis "
+                    "(N-S flipped or built on a different grid); rebuild with "
+                    "build_elev_vars.py --tag ok --name_root urma"
+                )
     else:
-        err(f"elev_vars MISSING: {ep}")
+        missing("elev_vars", ep)
 
     channels = None
     for name, path in [("target mean", norm_mean_path(aux_path, era5_mode)),
                        ("target std", norm_std_path(aux_path, era5_mode))]:
         if not os.path.isfile(path):
-            err(f"{name} MISSING: {path}")
+            missing(name, path)
             continue
         arr = np.load(path)
         bad = (~np.isfinite(arr)).sum() or ("std" in name and (arr <= 0).sum())
@@ -264,7 +289,7 @@ def main():
             if os.path.isfile(path):
                 coords[k] = np.load(path)
             else:
-                err(f"obs {var}: MISSING {path}")
+                missing(f"obs {var}", path)
         if len(coords) < 3 or len({a.shape for a in coords.values()}) != 1:
             if len(coords) == 3:
                 err(f"obs {var}: coord shapes differ "
@@ -280,7 +305,7 @@ def main():
         for stat in ("mean", "std"):
             path = os.path.join(aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy")
             if not os.path.isfile(path):
-                err(f"obs {var} {stat} MISSING: {path}")
+                missing(f"obs {var} {stat}", path)
                 continue
             arr = np.load(path)
             if arr.shape != (n,):
