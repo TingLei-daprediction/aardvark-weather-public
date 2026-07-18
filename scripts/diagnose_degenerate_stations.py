@@ -1,15 +1,36 @@
 """Diagnose stations whose normalization std is degenerate (~0 or non-finite).
 
-For every obs variable, finds the stations flagged by check_ok_run_files.py
-(std <= eps or non-finite) and reports, per staged month file:
-  - how many valid (non-NaN) samples the station has
-  - its distinct reported values (first few)
-  - a verdict:
-      PADDING   -- no valid obs in any month checked; NaN-masked, harmless
-      SINGLE-OB -- 1 valid ob in the stats window; 0/0 -> NaN, harmless in-window
-      STUCK     -- many valid but constant values; sensor/QC problem, in-window harmless
-      INF-RISK  -- station HAS valid obs in a month while std ~ 0: (x-mean)/0 = inf
-                   the moment that month is used -> apply the std guard before running
+Background: obs are normalized per station as (x - mean[i]) / std[i] with no epsilon
+(loader.py norm_hadisd), and the SetConv encoder masks NaN -- but NOT inf
+(set_convs.py). So a degenerate std is harmless exactly when every value it divides
+is NaN or equals the mean (both yield NaN -> masked), and dangerous when a varying
+value meets std ~ 0 (finite/0 = inf passes the mask into the encoder).
+
+For every obs variable, this script finds the stations flagged by
+check_ok_run_files.py (std <= eps or non-finite) and, per staged month file, reports
+the station's valid (non-NaN) sample count and its distinct reported values -- the
+two facts that fully determine what the division above will produce. Verdicts:
+
+  PADDING   -- no valid obs in any month checked. All values NaN; NaN propagates
+               through the division regardless of std and is masked. Harmless.
+  SINGLE-OB -- exactly 1 valid ob in the stats window. That value equals the mean,
+               so 0/0 -> NaN -> masked. Harmless in-window.
+  STUCK     -- many valid samples but one distinct value (stuck sensor / QC
+               flattening). Every value equals the mean -> 0/0 -> NaN -> masked.
+               Numerically harmless, but a data-quality defect worth excluding
+               at the source.
+  INF-RISK  -- valid, VARYING values in some month while std ~ 0: (x - mean)/0 =
+               +/-inf enters the encoder. Regenerate the norm factors with the
+               degenerate-std guard (std -> median station std) before running.
+               The script exits 1 so wrappers can gate on it.
+
+Also noted inline: a station with values but a NaN stored mean normalizes to NaN
+(masked) -- there the NaN mean, not the std, is doing the protecting.
+
+Scope: only stations whose std is ALREADY degenerate are inspected, and only for
+the months passed via --months. A station can be PADDING for the checked months
+and still wake up later; the permanent fix is the std guard in the norm-factor
+generation script -- this diagnostic only certifies the files you have today.
 
 Usage:
     python diagnose_degenerate_stations.py \
