@@ -34,7 +34,8 @@ cd $rundir
 output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output/"
 weights_dir="checking-point"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data/"
-aux_data_root="${data_root}/model_data_dir"
+aux_data_root="${data_root}"
+model_data_dir="${data_root}/model_data_dir"
 
 
 for v in data_root aux_data_root model_data_dir; do
@@ -64,6 +65,6 @@ python ../aardvark/train_module.py \
   --assim_train_start_date 2022-01-01 \
   --assim_train_end_date 2022-01-31 \
   --assim_val_start_date 2022-01-01 \
-  --assim_val_end_date 2022-02-31 \
+  --assim_val_end_date 2022-01-31 \
   --time_freq 1H \
   --grid_config ../aardvark/grid_config_ok.yaml
