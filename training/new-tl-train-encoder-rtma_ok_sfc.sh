@@ -49,7 +49,7 @@ python ../aardvark/train_module.py \
   --diff 0 \
   --obs_set rtma_surface \
   --era5_mode rtma_ok_sfc \
-  --out_channels 5 \
+  --in_channels 24 \
   --int_channels 24 \
   --mode assimilation \
   --lr 5e-4 \
