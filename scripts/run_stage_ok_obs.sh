@@ -11,7 +11,8 @@ src_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-annette/aardvark_OK/OK_data"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
 out_dir="${data_root}/hadisd_processed"
 
-for ym in 2022-01 2022-02; do
+#jfor ym in 2022-01 2022-02; do
+for ym in 2022-01 ; do
   src_dir="${src_root}/${ym//-/}/surface_processed"
   echo "==================== ${ym} ===================="
   python "${script_dir}/stage_ok_obs_month.py" \
