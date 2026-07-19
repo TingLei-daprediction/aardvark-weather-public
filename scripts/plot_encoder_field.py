@@ -32,9 +32,22 @@ SURFACE_VARS = [
     ("msl", "mean sea-level pressure"),
     ("sp", "surface pressure"),
 ]
+# rtma_ok_sfc target channels (docs/rtma_ok_data_directories.md section 3.1); same order
+# as the obs variables tas, sh, psl, u, v.
+OK_SFC_VARS = [
+    ("t2m", "2m temperature [K]"),
+    ("q2m", "2m specific humidity [kg/kg]"),
+    ("sp", "surface pressure [Pa]"),
+    ("u10", "10m u wind [m/s]"),
+    ("v10", "10m v wind [m/s]"),
+]
 
 
 def infer_channel_name(channel: int, n_channels: int) -> str:
+    if n_channels == len(OK_SFC_VARS):
+        short_name, long_name = OK_SFC_VARS[channel]
+        return f"{short_name} ({long_name})"
+
     pressure_count = len(PRESSURE_VARS_4U) * len(PRESSURE_LEVELS_4U)
     if n_channels in (24, 30) and channel < pressure_count:
         var_index = channel // len(PRESSURE_LEVELS_4U)
@@ -62,27 +75,27 @@ def load_pair(run_dir: Path, rank: Optional[str], pred_file: Optional[str], targ
             target_path = run_dir / target_path
         return np.load(pred_path), np.load(target_path), pred_path, target_path
 
+    # All unnormalized (physical-units) pairs take priority; the normalized eval dump
+    # (preds_eval.npy) is a last resort and gets a loud warning, since e.g. z-scored
+    # surface pressure (~ -2.5..1.5) is easy to mistake for a broken field.
     candidates = []
     if rank is not None:
         candidates.append((f"unnorm_preds_{rank}.npy", f"unnorm_targets_{rank}.npy"))
-    candidates.extend(
-        [
-            ("unnorm_preds.npy", "unnorm_targets.npy"),
-            ("preds_eval.npy", "y_target_eval.npy"),
-        ]
-    )
+    candidates.append(("unnorm_preds.npy", "unnorm_targets.npy"))
+    for pred_path in sorted(run_dir.glob("unnorm_preds_*.npy")):
+        suffix = pred_path.name.replace("unnorm_preds_", "")
+        candidates.append((pred_path.name, f"unnorm_targets_{suffix}"))
+    candidates.append(("preds_eval.npy", "y_target_eval.npy"))
 
     for pred_name, target_name in candidates:
         pred_path = run_dir / pred_name
         target_path = run_dir / target_name
         if pred_path.exists() and target_path.exists():
-            return np.load(pred_path), np.load(target_path), pred_path, target_path
-
-    ranked_preds = sorted(run_dir.glob("unnorm_preds_*.npy"))
-    for pred_path in ranked_preds:
-        suffix = pred_path.name.replace("unnorm_preds_", "")
-        target_path = run_dir / f"unnorm_targets_{suffix}"
-        if target_path.exists():
+            if pred_name == "preds_eval.npy":
+                print(
+                    "[WARN] only the NORMALIZED eval arrays (preds_eval.npy) were found; "
+                    "plotted values are z-scores, not physical units."
+                )
             return np.load(pred_path), np.load(target_path), pred_path, target_path
 
     raise FileNotFoundError(
