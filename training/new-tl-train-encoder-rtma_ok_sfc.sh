@@ -10,7 +10,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=0
 #SBATCH --open-mode=truncate
-#SBATCH -t 8:00:00
+#SBATCH -t 24:00:00
 #SBATCH -o new-aardvark-gpu-train-ok.%j.out
 #SBATCH -e new-aardvark-gpu-train-ok.%j.err
 
@@ -54,7 +54,7 @@ python ../aardvark/train_module.py \
   --int_channels 24 \
   --mode assimilation \
   --lr 5e-4 \
-  --batch_size 2 \
+  --batch_size 1 \
   --start_ind 0 \
   --end_ind 5 \
   --epoch 300 \
