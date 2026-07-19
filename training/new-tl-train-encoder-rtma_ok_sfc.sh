@@ -17,6 +17,10 @@
 
 
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
+# The submitting shell's environment leaks into the job (sbatch --export=ALL default);
+# a loaded spack-stack module sets PYTHONPATH to a python3.11 numpy that shadows the
+# conda env's own packages. Clear it so only aardvark-env is visible.
+unset PYTHONPATH
 set -euo pipefail
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd $rundir
