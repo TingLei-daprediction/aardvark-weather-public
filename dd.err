@@ -1,118 +1,51 @@
-[INFO] RmseLoss NaN diagnostics are disabled by default; enable with --debug_nan_checks 1.
-Loading HADISD
-Loading ERA5
-Loading HADISD
-Loading ERA5
-[INFO] assimilation input channels: expected=24 configured=24 climatology_channels=5 climatology_path=unknown
-[INFO] train_dataset len=719 val_dataset len=719
-Warning: weights path not found, skipping load: checking-point
-[DEBUG] era5_mode rtma_ok_sfc time_freq 1H era5_frame_shape (5, 331, 171) means_shape (5, 1, 1) stds_shape (5, 1, 1)
-[DEBUG] encodings[0] shape: (1, 10, 331, 171)
-[DEBUG] encodings[1] shape: (1, 4, 331, 171)
-[DEBUG] encodings[2] shape: (1, 5, 331, 171)
-[DEBUG] encodings[3] shape: (1, 5, 331, 171)
-[WARN] unnorm_pred failed in eval_epoch: 'y_context' debug={'era5_mode': 'rtma_ok_sfc', 'y_target': (1, 171, 331, 5), 'y_context': None, 'out': (1, 171, 331, 5), 'ic': None, 'means': (5, 1, 1), 'stds': (5, 1, 1)}
-[DEBUG] era5_mode rtma_ok_sfc time_freq 1H era5_frame_shape (5, 331, 171) means_shape (5, 1, 1) stds_shape (5, 1, 1)
-[INFO] epoch 1/300 train_loss=0.630158 val_loss=0.608610
-[INFO] epoch 2/300 train_loss=0.623452 val_loss=0.611213
-[INFO] epoch 3/300 train_loss=0.613436 val_loss=0.606641
-[INFO] epoch 4/300 train_loss=0.610515 val_loss=0.607650
-[INFO] epoch 5/300 train_loss=0.612464 val_loss=0.610057
-[INFO] epoch 6/300 train_loss=0.609482 val_loss=0.606179
-[INFO] epoch 7/300 train_loss=0.611753 val_loss=0.606876
-[INFO] epoch 8/300 train_loss=0.610437 val_loss=0.606312
-[INFO] epoch 9/300 train_loss=0.609253 val_loss=0.623892
-[INFO] epoch 10/300 train_loss=0.609447 val_loss=0.605275
-[INFO] epoch 11/300 train_loss=0.604803 val_loss=0.588653
-[INFO] epoch 12/300 train_loss=0.601118 val_loss=0.596723
-[INFO] epoch 13/300 train_loss=0.586318 val_loss=0.602255
-[INFO] epoch 14/300 train_loss=0.599674 val_loss=0.598688
-[INFO] epoch 15/300 train_loss=0.576836 val_loss=0.565038
-[INFO] epoch 16/300 train_loss=0.552320 val_loss=0.544524
-[INFO] epoch 17/300 train_loss=0.543647 val_loss=0.534799
-[INFO] epoch 18/300 train_loss=0.542428 val_loss=0.539827
-[INFO] epoch 19/300 train_loss=0.544074 val_loss=0.526369
-[INFO] epoch 20/300 train_loss=0.551932 val_loss=0.535338
-[INFO] epoch 21/300 train_loss=0.538227 val_loss=0.541198
-[INFO] epoch 22/300 train_loss=0.540519 val_loss=0.527691
-[INFO] epoch 23/300 train_loss=0.530621 val_loss=0.527524
-[INFO] epoch 24/300 train_loss=0.537311 val_loss=0.539254
-[INFO] epoch 25/300 train_loss=0.535828 val_loss=0.518131
-[INFO] epoch 26/300 train_loss=0.528550 val_loss=0.517866
-[INFO] epoch 27/300 train_loss=0.526084 val_loss=0.523539
-[INFO] epoch 28/300 train_loss=0.528796 val_loss=0.518969
-[INFO] epoch 29/300 train_loss=0.521326 val_loss=0.513259
-[INFO] epoch 30/300 train_loss=0.524465 val_loss=0.509078
-[INFO] epoch 31/300 train_loss=0.520860 val_loss=0.532974
-[INFO] epoch 32/300 train_loss=0.516926 val_loss=0.515910
-[INFO] epoch 33/300 train_loss=0.519539 val_loss=0.538032
-[INFO] epoch 34/300 train_loss=0.516124 val_loss=0.502659
-[INFO] epoch 35/300 train_loss=0.511618 val_loss=0.501600
-[INFO] epoch 36/300 train_loss=0.509052 val_loss=0.504561
-[INFO] epoch 37/300 train_loss=0.509969 val_loss=0.505182
-[INFO] epoch 38/300 train_loss=0.577167 val_loss=0.572198
-[INFO] epoch 39/300 train_loss=0.581163 val_loss=0.578167
-[INFO] epoch 40/300 train_loss=0.571733 val_loss=0.544800
-[INFO] epoch 41/300 train_loss=0.542939 val_loss=0.536704
-[INFO] epoch 42/300 train_loss=0.541173 val_loss=0.533306
-[INFO] epoch 43/300 train_loss=0.535226 val_loss=0.534064
-[INFO] epoch 44/300 train_loss=0.554845 val_loss=0.534352
-[INFO] epoch 45/300 train_loss=0.536111 val_loss=0.539928
-[INFO] epoch 46/300 train_loss=0.534649 val_loss=0.541563
-[INFO] epoch 47/300 train_loss=0.532075 val_loss=0.528621
-[INFO] epoch 48/300 train_loss=0.533262 val_loss=0.529853
-[INFO] epoch 49/300 train_loss=0.529481 val_loss=0.529121
-[INFO] epoch 50/300 train_loss=0.531182 val_loss=0.521472
-[INFO] epoch 51/300 train_loss=0.531103 val_loss=0.519642
-[INFO] epoch 52/300 train_loss=0.530669 val_loss=0.517783
-[INFO] epoch 53/300 train_loss=0.529398 val_loss=0.544649
-[INFO] epoch 54/300 train_loss=0.530181 val_loss=0.520852
-[INFO] epoch 55/300 train_loss=0.529112 val_loss=0.523058
-[INFO] epoch 56/300 train_loss=0.535845 val_loss=0.542745
-[INFO] epoch 57/300 train_loss=0.536616 val_loss=0.526076
-[INFO] epoch 58/300 train_loss=0.528033 val_loss=0.525661
-[INFO] epoch 59/300 train_loss=0.524986 val_loss=0.528283
-[INFO] epoch 60/300 train_loss=0.608296 val_loss=0.559583
-[INFO] epoch 61/300 train_loss=0.537758 val_loss=0.761621
-[INFO] epoch 62/300 train_loss=0.525708 val_loss=0.499685
-[INFO] epoch 63/300 train_loss=0.512534 val_loss=0.507944
-[INFO] epoch 64/300 train_loss=0.510171 val_loss=0.510818
-[INFO] epoch 65/300 train_loss=0.511446 val_loss=0.501219
-[INFO] epoch 66/300 train_loss=0.503100 val_loss=0.502221
-[INFO] epoch 67/300 train_loss=0.678932 val_loss=0.766757
-[INFO] epoch 68/300 train_loss=0.652608 val_loss=0.545014
-[INFO] epoch 69/300 train_loss=0.565243 val_loss=0.544704
-[INFO] epoch 70/300 train_loss=0.541640 val_loss=0.544340
-[INFO] epoch 71/300 train_loss=0.554616 val_loss=0.595119
-[INFO] epoch 72/300 train_loss=0.558832 val_loss=0.596851
-[INFO] epoch 73/300 train_loss=0.568034 val_loss=0.545857
-[INFO] epoch 74/300 train_loss=0.539056 val_loss=0.529562
-[INFO] epoch 75/300 train_loss=0.532790 val_loss=0.527491
-[INFO] epoch 76/300 train_loss=0.526978 val_loss=0.516083
-[INFO] epoch 77/300 train_loss=0.521278 val_loss=0.508600
-[INFO] epoch 78/300 train_loss=0.501293 val_loss=0.477722
-[INFO] epoch 79/300 train_loss=0.490491 val_loss=0.470602
-[INFO] epoch 80/300 train_loss=0.475712 val_loss=0.459167
-[INFO] epoch 81/300 train_loss=0.464640 val_loss=0.465787
-[INFO] epoch 82/300 train_loss=0.463642 val_loss=0.464302
-[INFO] epoch 83/300 train_loss=0.458628 val_loss=0.440396
-[INFO] epoch 84/300 train_loss=0.455369 val_loss=0.464251
-[INFO] epoch 85/300 train_loss=0.455137 val_loss=0.460933
-[INFO] epoch 86/300 train_loss=0.449484 val_loss=0.442541
-[INFO] epoch 87/300 train_loss=0.446486 val_loss=0.452181
-[INFO] epoch 88/300 train_loss=0.446597 val_loss=0.428355
-[INFO] epoch 89/300 train_loss=0.446297 val_loss=0.500919
-[INFO] epoch 90/300 train_loss=0.441553 val_loss=0.433579
-[INFO] epoch 91/300 train_loss=0.443403 val_loss=0.451034
-[INFO] epoch 92/300 train_loss=0.438698 val_loss=0.441851
-[INFO] epoch 93/300 train_loss=0.433258 val_loss=0.444830
-[INFO] epoch 94/300 train_loss=0.434150 val_loss=0.437279
-[INFO] epoch 95/300 train_loss=0.433116 val_loss=0.433817
-[INFO] epoch 96/300 train_loss=0.431676 val_loss=0.420694
-[INFO] epoch 97/300 train_loss=0.425596 val_loss=0.415049
-[INFO] epoch 98/300 train_loss=0.421343 val_loss=0.414810
-[INFO] epoch 99/300 train_loss=0.421053 val_loss=0.433509
-[INFO] epoch 100/300 train_loss=0.413702 val_loss=0.401580
-[INFO] epoch 101/300 train_loss=0.415251 val_loss=0.412782
-[INFO] epoch 102/300 train_loss=0.427369 val_loss=0.397312
-[INFO] epoch 103/300 train_loss=0.404591 val_loss=0.404276
+Traceback (most recent call last):
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/__init__.py", line 24, in <module>
+    from . import multiarray
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/multiarray.py", line 10, in <module>
+    from . import overrides
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/overrides.py", line 8, in <module>
+    from numpy.core._multiarray_umath import (
+ModuleNotFoundError: No module named 'numpy.core._multiarray_umath'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__init__.py", line 130, in <module>
+    from numpy.__config__ import show as show_config
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__config__.py", line 4, in <module>
+    from numpy.core._multiarray_umath import (
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/__init__.py", line 50, in <module>
+    raise ImportError(msg)
+ImportError: 
+
+IMPORTANT: PLEASE READ THIS FOR ADVICE ON HOW TO SOLVE THIS ISSUE!
+
+Importing the numpy C-extensions failed. This error can happen for
+many reasons, often due to issues with your setup or how NumPy was
+installed.
+
+We have compiled some common reasons and troubleshooting tips at:
+
+    https://numpy.org/devdocs/user/troubleshooting-importerror.html
+
+Please note and check the following:
+
+  * The Python version is: Python3.8 from "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/bin/python"
+  * The NumPy version is: "1.26.4"
+
+and make sure that they are the versions you expect.
+Please carefully study the documentation linked above for further help.
+
+Original error was: No module named 'numpy.core._multiarray_umath'
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "../aardvark/train_module.py", line 12, in <module>
+    import numpy as np
+  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__init__.py", line 135, in <module>
+    raise ImportError(msg) from e
+ImportError: Error importing numpy: you should not try to import numpy from
+        its source directory; please exit the numpy source tree, and relaunch
+        your python interpreter from there.
