@@ -14,7 +14,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=0
 #SBATCH --open-mode=truncate
-#SBATCH -t 8:00:00
+#SBATCH -t 24:00:00
 #SBATCH -o new-aardvark-gpu-train-ok-2gpu.%j.out
 #SBATCH -e new-aardvark-gpu-train-ok-2gpu.%j.err
 
