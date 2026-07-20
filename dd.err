@@ -1,51 +1,18 @@
-Traceback (most recent call last):
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/__init__.py", line 24, in <module>
-    from . import multiarray
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/multiarray.py", line 10, in <module>
-    from . import overrides
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/overrides.py", line 8, in <module>
-    from numpy.core._multiarray_umath import (
-ModuleNotFoundError: No module named 'numpy.core._multiarray_umath'
-
-During handling of the above exception, another exception occurred:
-
-Traceback (most recent call last):
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__init__.py", line 130, in <module>
-    from numpy.__config__ import show as show_config
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__config__.py", line 4, in <module>
-    from numpy.core._multiarray_umath import (
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/core/__init__.py", line 50, in <module>
-    raise ImportError(msg)
-ImportError: 
-
-IMPORTANT: PLEASE READ THIS FOR ADVICE ON HOW TO SOLVE THIS ISSUE!
-
-Importing the numpy C-extensions failed. This error can happen for
-many reasons, often due to issues with your setup or how NumPy was
-installed.
-
-We have compiled some common reasons and troubleshooting tips at:
-
-    https://numpy.org/devdocs/user/troubleshooting-importerror.html
-
-Please note and check the following:
-
-  * The Python version is: Python3.8 from "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/bin/python"
-  * The NumPy version is: "1.26.4"
-
-and make sure that they are the versions you expect.
-Please carefully study the documentation linked above for further help.
-
-Original error was: No module named 'numpy.core._multiarray_umath'
-
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "../aardvark/train_module.py", line 12, in <module>
-    import numpy as np
-  File "/contrib/spack-stack/spack-stack-1.9.3/envs/ue-oneapi-2024.2.1/install/oneapi/2024.2.1/py-numpy-1.26.4-ndkb37i/lib/python3.11/site-packages/numpy/__init__.py", line 135, in <module>
-    raise ImportError(msg) from e
-ImportError: Error importing numpy: you should not try to import numpy from
-        its source directory; please exit the numpy source tree, and relaunch
-        your python interpreter from there.
+cp: cannot stat 'reproduce_training.sh': No such file or directory
+cp: cannot stat 'reproduce_training.sh': No such file or directory
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/aten/src/ATen/native/TensorShape.cpp:3587.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:891: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
+  return torch.from_numpy(arr).float().to(self.device)
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/fromnumeric.py:3464: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/_methods.py:192: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/aten/src/ATen/native/TensorShape.cpp:3587.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:891: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
+  return torch.from_numpy(arr).float().to(self.device)
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/fromnumeric.py:3464: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/numpy/core/_methods.py:192: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
