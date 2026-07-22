@@ -1,5 +1,5 @@
-cp: cannot stat 'reproduce_training.sh': No such file or directory
-cp: cannot stat 'reproduce_training.sh': No such file or directory
+cp: cannot stat 'reproduce_training.sh'cp: : No such file or directorycannot stat 'reproduce_training.sh'
+: No such file or directory
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/envs/aardvark-env/lib/python3.8/site-packages/torch/functional.py:512: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/aten/src/ATen/native/TensorShape.cpp:3587.)
   return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
 /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/aardvark/loader.py:891: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /opt/conda/conda-bld/pytorch_1712608851799/work/torch/csrc/utils/tensor_numpy.cpp:206.)
