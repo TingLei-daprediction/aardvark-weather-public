@@ -182,6 +182,8 @@ def main():
     truth = target[args.sample_index, ..., args.channel]
     forecast = pred[args.sample_index, ..., args.channel]
     diff = forecast - truth
+    rmse = float(np.sqrt(np.nanmean(diff**2)))
+    bias = float(np.nanmean(diff))
 
     finite_fields = np.concatenate(
         [
@@ -210,7 +212,7 @@ def main():
     im1 = axes[1].imshow(forecast, origin="lower", cmap="viridis", vmin=field_min, vmax=field_max)
     axes[1].set_title("Prediction")
     im2 = axes[2].imshow(diff, origin="lower", cmap="bwr", vmin=-diff_lim, vmax=diff_lim)
-    axes[2].set_title("Prediction - Truth")
+    axes[2].set_title(f"Prediction - Truth\nRMSE={rmse:.6g}, Bias={bias:.6g}")
 
     for ax in axes:
         ax.set_xlabel("x index")
@@ -232,8 +234,6 @@ def main():
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-    rmse = float(np.sqrt(np.nanmean(diff**2)))
-    bias = float(np.nanmean(diff))
     print(f"Wrote {out_path}")
     print(f"pred_shape={pred.shape} target_shape={target.shape}")
     print(f"rmse={rmse:.6g} bias={bias:.6g}")

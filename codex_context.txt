@@ -66,3 +66,49 @@ Processor/decoder setup uncertainty summary (for external review)
   which poisoned mean/std in `mean_4u_sfc_1.npy`/`std_4u_sfc_1.npy` when using plain sums.
   Best practice: use NaN-aware stats (`np.nansum` + per-channel valid counts) and optionally
   fill NaN/Inf in memmaps via `--fill_nan 0.0` in `scripts/prep_era5_truth.py` before training.
+
+RTMA-OK computational efficiency (2026-07-22)
+Retrieval keywords: computational efficiency, RTMA performance, H100 utilization,
+training throughput, convergence efficiency, DDP scaling, ViT token cost.
+
+- Workload: January 2022 hourly RTMA-OK surface encoder, about 719 samples; 2 H100 GPUs,
+  DDP, batch_size=1 per rank, 300 epochs per run. A chained weights-only warm start has
+  produced about 600 epochs in roughly two days.
+- Correct step count: DistributedSampler pads/splits about 720 samples across two ranks,
+  so batch_size=1 gives about 360 synchronized optimizer steps per epoch, global batch=2.
+- The current vit_assimilation encoder uses constant-rate Adam. The hard-coded cosine
+  scheduler in trainer.py is used only when decoder == "vit", so it is NOT active here.
+- Current warm start restores model weights only. It resets Adam moments, epoch numbering,
+  scheduler state (if one is later added), and best-loss history; it is not a true resume.
+- Full validation runs every epoch. The encoder path does not save every forecast every
+  epoch, but it performs CPU transfers, unnormalization, physical-space loss work, and a
+  complete validation forward pass. Validate every 5 epochs and compute/save expensive
+  physical diagnostics only on improvement or at a wider interval.
+- Do not add DataLoader workers blindly. Dataset __getitem__ currently moves tensors to
+  CUDA. Proper prefetching requires returning CPU tensors, moving batches to the rank GPU
+  in the trainer, then enabling pin_memory, non_blocking transfers, persistent_workers,
+  and a small tested num_workers value.
+- Benchmark one GPU with batch=2 against two GPUs with batch=1. Both have global batch=2;
+  one GPU may win by avoiding an all-reduce every small step. Then test per-rank batch 2
+  and 4 subject to memory. Larger batches reduce optimizer updates per epoch, so compare
+  by samples/updates and convergence, not equal epoch count alone.
+- H100 BF16 can accelerate the ViT, but keep ConvDeepSet coordinate/distance calculations
+  in FP32. Normalized lon/lat differences are small and may lose precision under BF16.
+- RTMA-only model construction could omit unused global-observation modules and may allow
+  DDP find_unused_parameters=False, avoiding graph traversal and unused-parameter work.
+- ConvDeepSet opportunities: cache static station-to-grid squared distances, recompute only
+  Gaussian weights as learned length scales change, and vectorize variables when station
+  coordinates are shared.
+- Likely architectural hotspot: Grid B is 384x192 with patch_size=3, producing 128x64 =
+  8192 global-attention tokens. Attention cost grows quadratically with token count. Profile
+  before assuming I/O is dominant. Longer-term options include SDPA/Flash Attention,
+  windowed or hierarchical attention, a smaller inner grid, larger patches, or reduced
+  width/depth, with fine-scale analysis quality checked explicitly.
+- Convergence improvements: true optimizer/checkpoint resume, short LR warmup, cosine decay
+  based on the actual total optimizer-step count, final LR near 1e-6, gradient clipping,
+  validation all-reduce across ranks, and early stopping.
+- Recommended order: (1) time data/forward/backward/validation and inspect GPU utilization;
+  (2) benchmark 1-GPU batch=2 vs 2-GPU batch=1; (3) reduce validation frequency and expensive
+  diagnostics; (4) test per-rank batch 2/4; (5) selectively apply BF16 to ViT; (6) implement
+  true resume and an appropriate LR schedule; (7) optimize the measured SetConv or ViT
+  bottleneck rather than relying on unprofiled assumptions.
