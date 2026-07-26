@@ -1,0 +1,83 @@
+# Grid configuration for the Oklahoma 2.5 km domain -- REDUCED GRID B variant.
+#
+# Identical to grid_config_ok.yaml in every respect EXCEPT the inner ViT grid (Grid B), which is
+# reduced from 384 x 192 to 336 x 174. This is a pure Grid-B A/B test: same data files, same
+# Grid A, same everything else, so any difference in cost or skill is attributable to Grid B.
+#
+# Usage:
+#   python train_module.py ... --grid_config ../aardvark/grid_config_ok_reduced_grid_B.yaml
+#
+# ---------------------------------------------------------------------------------------------
+# WHY 336 x 174
+#
+# Grid A (derived from the coordinate files below) is 331 lon x 171 lat. Grid B is a free choice
+# subject to three constraints, all enforced in code:
+#   1. EVEN            -- models.py:113-118 (odd sizes break stride-2/pooling in the backbone)
+#   2. >= Grid A       -- models.py:119-124 (oversample, never undersample)
+#   3. divisible by patch_size=3 -- NOT asserted, but required in practice: vit.py:187-188 and
+#      :236-237 use floor division (img_size // patch_size), so a non-divisible size silently
+#      TRUNCATES the trailing edge rather than padding it. (Note: the global default 256 x 128
+#      is NOT divisible by 3 -- it drops 1 column and 2 rows on every forward pass.)
+#
+#                       384 x 192 (grid_config_ok.yaml)   336 x 174 (here)
+#   >= Grid A                     yes                          yes
+#   even                          yes                          yes
+#   336 = 112*3, 174 = 58*3       yes (128*3, 64*3)            yes
+#   ViT tokens                    128*64 = 8192                112*58 = 6496   (-21%)
+#   attention FLOPs (~tokens^2)   1.00x                        0.63x           (-37%)
+#   A->B resample ratio           1.160x (~53 dup columns)     1.015x (~5 dup columns)
+#
+# 336 x 174 is the smallest box satisfying all three constraints. The gain is twofold:
+#   - Compute: attention cost grows quadratically with token count, and Grid B at 384 x 192 means
+#     ~23% of the ViT's output cells are computed and then discarded by the B->A downsample
+#     (1 - 56601/73728 = 23.2%). At 336 x 174 that drops to 3.2% (1 - 56601/58464).
+#   - Fidelity: both A->B and B->A use nn.functional.interpolate with NO mode argument, i.e.
+#     mode="nearest" (models.py:516, :532). At a 1.16x non-integer ratio, nearest-neighbour
+#     resampling duplicates/drops columns irregularly and stair-steps the output analysis. At
+#     1.015x the distortion is far smaller.
+#
+# ---------------------------------------------------------------------------------------------
+# CAVEAT -- checkpoint compatibility
+#
+# Changing Grid B changes the ViT token grid, so positional embeddings from a 384 x 192 run do
+# NOT transfer directly. Either start fresh, or use vit.interpolate_pos_embed (vit.py:57) to
+# resize them. The trainer loads with strict=False (trainer.py:97, :477), so a mismatched
+# warm start will NOT fail loudly -- it will silently skip the pos-embed. Verify deliberately.
+#
+# ---------------------------------------------------------------------------------------------
+# Everything below is copied verbatim from grid_config_ok.yaml -- keep the two files in sync.
+
+# Coordinate file names (1-D OK axes built by build_grid_lonlat.py).
+grid_files:
+  # Read by the datasets, relative to data_path (written by prep_urma_ok_hourly.py
+  # --name_root urma):
+  loader_x: "urma/urma_x_ok.npy"
+  loader_y: "urma/urma_y_ok.npy"
+  # Read by the model, relative to model_data_path (copy the two files above there):
+  model_x: "grid_lon_lat/urma_x_ok.npy"
+  model_y: "grid_lon_lat/urma_y_ok.npy"
+
+# Other grid/domain-dependent data files. {era5_mode}, {freq}, {year} are substituted at
+# runtime. These MUST be the OK-domain memmaps (built on the same 1-D OK grid), not the global
+# files -- every grid-dependent array is asserted against the derived OK nlon/nlat.
+# norm_mean/norm_std/era5_memmap keep the default "_1" naming: era5_mode (rtma_ok_sfc) already
+# identifies the OK domain, and the per-month loader paths, normalize_background.py, and
+# prep_urma_ok_hourly.py all hardcode the "_1" token -- an "_ok" suffix here would point the
+# runtime at files no preprocessing script writes.
+data_files:
+  # OK data uses the "urma" naming token (source is URMA, not ERA5). All names below must
+  # match what prep_urma_ok_hourly.py --name_root urma / normalize_background.py --subdir urma
+  # write. norm files carry no token (mean_{era5_mode}_1.npy).
+  elev_vars: "urma/elev_vars_ok.npy"
+  norm_mean: "norm_factors/mean_{era5_mode}_1.npy"
+  norm_std: "norm_factors/std_{era5_mode}_1.npy"
+  era5_memmap: "urma/urma_{era5_mode}_1_{freq}_{year}.memmap"
+  # Per-month files (sub-daily rtma_surface path):
+  era5_month: "urma/urma_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap"
+  background_month: "urma/background_{era5_mode}_1_{year}-{month:02d}.memmap"
+  lat_weights: "lat_weights/weights_lat_ok.npy"
+
+# Inner ViT grid (Grid B) -- REDUCED. Even, >= Grid A (331 x 171), and exactly divisible by
+# patch_size=3 (336 = 112*3, 174 = 58*3). See the rationale block at the top of this file.
+int_x: 336
+int_y: 174
