@@ -94,7 +94,10 @@ class DDPTrainer:
             if keys and keys[0].startswith("module."):
                 state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
 
-        self.model.load_state_dict(state_dict, strict=False)
+        # strict=True: a partially-matching checkpoint (missing keys) must fail loudly
+        # rather than silently run with randomly-initialized weights -- essential for
+        # eval-only/inference runs (--epoch 0), where wrong output would look plausible.
+        self.model.load_state_dict(state_dict, strict=True)
 
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()

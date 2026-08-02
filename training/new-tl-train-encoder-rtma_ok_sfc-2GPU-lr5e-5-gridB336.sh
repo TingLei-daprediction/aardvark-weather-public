@@ -5,7 +5,8 @@
 # The ONLY functional change is --grid_config, which points at
 # aardvark/grid_config_ok_reduced_grid_B.yaml (int_x 336, int_y 174 instead of 384/192).
 # Job name, output_dir, master_port and log names are changed only so this can run alongside
-# the baseline without collision.
+# the baseline without collision. Port map for the OK runs: 12350 baseline, 12351 warmstart,
+# 12352 warmstart2, 12360 this run, 12361 its warmstart.
 #
 # Rationale and full analysis: docs/note_grid_b_sizing.md
 #   Grid A (OK) is 331 x 171. 336 = 112*3 and 174 = 58*3, so 336 x 174 is the smallest box that
@@ -93,7 +94,7 @@ done
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
   --weights_dir "$weights_dir" \
-  --master_port 12351 \
+  --master_port 12360 \
   --decoder vit_assimilation \
   --loss rmse \
   --diff 0 \
