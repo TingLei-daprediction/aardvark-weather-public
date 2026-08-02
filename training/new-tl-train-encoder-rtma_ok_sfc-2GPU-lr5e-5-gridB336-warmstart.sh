@@ -34,7 +34,7 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=0
 #SBATCH --open-mode=truncate
-#SBATCH -t 24:00:00
+#SBATCH -t 40:00:00
 #SBATCH -o new-aardvark-gpu-train-ok-2gpu-gB336-warmstart.%j.out
 #SBATCH -e new-aardvark-gpu-train-ok-2gpu-gB336-warmstart.%j.err
 
@@ -78,7 +78,7 @@ python ../aardvark/train_module.py \
   --batch_size 1 \
   --start_ind 0 \
   --end_ind 5 \
-  --epoch 300 \
+  --epoch 900 \
   --cmd_init_ls 2e-4 \
   --data_path "$data_root" \
   --aux_data_path "$aux_data_root" \
