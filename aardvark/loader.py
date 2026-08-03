@@ -1073,6 +1073,14 @@ class WeatherDatasetAssimilation(WeatherDataset):
                 "the two-frame / year-boundary path assumes per-year ERA5 memmaps."
             )
 
+    def __len__(self):
+        if self.monthly:
+            # Monthly RTMA uses only the current timestamp and rejects two_frames, so every
+            # timestamp is a complete sample. Preserve the inherited N-2 convention only for
+            # the original global/static path.
+            return self.index.shape[0]
+        return super().__len__()
+
     def load_era5_time(self, index):
         """
         ERA5 ground truth data loading

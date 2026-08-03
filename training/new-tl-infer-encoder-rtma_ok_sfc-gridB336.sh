@@ -7,11 +7,8 @@
 #   unnorm_preds_0.npy / unnorm_targets_0.npy   shape (1, nlat, nlon, 5)
 # into --output_dir, readable directly by scripts/plot_encoder_field.py.
 #
-# Date-window quirk: WeatherDataset.__len__ = len(dates) - 2, so the val window must span
-# infer_time .. infer_time+2h (3 hourly stamps -> dataset length 1 -> exactly ONE sample,
-# = infer_time). The +2h stamps are never evaluated but their month must be staged, so
-# infer_time must be <= 21:00 UTC on the last staged day of a month (else +2h crosses
-# into an un-staged month and the loader fails at init).
+# The monthly RTMA loader counts each timestamp directly, so start=end constructs exactly
+# one sample. No artificial future timestamps or next-month files are required.
 #
 # ONE time per run: with a longer window eval_epoch saves only the LAST val batch, and
 # the val sampler shuffles -- do not widen the window expecting multi-time output.
@@ -53,7 +50,7 @@ model_data_dir="${data_root}/model_data_dir"
 time_token=${infer_time//[-:]/}          # e.g. 20220115T0600
 output_prefix="${checkpoint%epoch_*}"
 #clt output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-infer-${time_token}/"
-output_dir=${output_prefix}/OK-infer-${time_token}/
+output_dir="${output_prefix}/OK-infer-${time_token}/"
 
 # The trainer only WARNS and skips on a bad weights path (running random weights);
 # fail here instead so a typo can never produce plausible-looking garbage.
@@ -63,10 +60,7 @@ for v in data_root aux_data_root model_data_dir; do
 done
 mkdir -p "$output_dir"
 
-# Window end = T + 2 hourly steps (see header). Train window is unused for learning at
-# --epoch 0 but the loader is still constructed, so keep it identically tiny.
-end_window=$(date -u -d "${infer_time/T/ } +2 hours" +"%Y-%m-%dT%H:%M")
-echo "Inference time: ${infer_time}  (val window ${infer_time}..${end_window})"
+echo "Inference time: ${infer_time}  (single-timestamp train/val dataset)"
 echo "Checkpoint:     ${checkpoint}"
 echo "Output dir:     ${output_dir}"
 
@@ -92,9 +86,9 @@ python ../aardvark/train_module.py \
   --aux_data_path "$aux_data_root" \
   --model_data_path "$model_data_dir" \
   --assim_train_start_date "$infer_time" \
-  --assim_train_end_date "$end_window" \
+  --assim_train_end_date "$infer_time" \
   --assim_val_start_date "$infer_time" \
-  --assim_val_end_date "$end_window" \
+  --assim_val_end_date "$infer_time" \
   --time_freq 1H \
   --obs_norm_mode monthly \
   --grid_config ../aardvark/grid_config_ok_reduced_grid_B.yaml
