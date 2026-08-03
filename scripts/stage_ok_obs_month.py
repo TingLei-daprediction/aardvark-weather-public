@@ -74,11 +74,37 @@ def main():
         help="monthly norm output directory (default: sibling norm_factors directory)",
     )
     p.add_argument("--freq_tag", default="1h", choices=sorted(FRAMES_PER_DAY))
+    p.add_argument("--print_counts", action="store_true",
+                   help="print loader-variable=station-count records and exit")
+    p.add_argument("--max_stations", action="append", default=[], metavar="VAR=N",
+                   help="pad VAR to cross-month station count N; repeat per variable")
     p.add_argument(
         "--dry_run", action="store_true", help="check everything, write nothing"
     )
 
     args = p.parse_args()
+
+    max_stations = {}
+    for item in args.max_stations:
+        try:
+            var, count = item.split("=", 1)
+            count = int(count)
+        except (ValueError, TypeError):
+            p.error(f"invalid --max_stations {item!r}; expected VAR=N")
+        if var not in VAR_MAP.values() or count <= 0:
+            p.error(f"invalid --max_stations {item!r}")
+        max_stations[var] = count
+
+    if args.print_counts:
+        for src_var, tgt_var in VAR_MAP.items():
+            lon_path = os.path.join(args.src_dir, f"{src_var}_lon_train.npy")
+            if not os.path.isfile(lon_path):
+                p.error(f"missing coordinate file {lon_path}")
+            lon = np.asarray(np.load(lon_path))
+            if lon.ndim != 1 or lon.size == 0:
+                p.error(f"invalid coordinate array {lon_path}: shape={lon.shape}")
+            print(f"{tgt_var}={lon.size}")
+        return
 
     year, month = map(int, args.year_month.split("-"))
     frames = calendar.monthrange(year, month)[1] * FRAMES_PER_DAY[args.freq_tag]
@@ -94,7 +120,8 @@ def main():
         os.makedirs(norm_dir, exist_ok=True)
 
     plans = []  # (src, dst) copies to perform after all checks pass
-    generated = []  # (array, dst) monthly station-aligned normalization files
+    generated = []  # (array, dst) padded coordinate/norm .npy files
+    generated_memmaps = []  # source, frames, real/stored stations, destination
     for src_var, tgt_var in VAR_MAP.items():
         print(f"\n{src_var} -> {tgt_var}")
 
@@ -114,7 +141,13 @@ def main():
             err(f"coord shape mismatch: {shapes}")
             continue
         n_stations = coords["lon"].shape[0]
-        print(f"  stations: {n_stations}")
+        padded_stations = max_stations.get(tgt_var, n_stations)
+        if padded_stations < n_stations:
+            err(f"{tgt_var}: maximum {padded_stations} is smaller than "
+                f"real station count {n_stations}")
+            continue
+        print(f"  stations: real={n_stations}, stored={padded_stations}, "
+              f"padding={padded_stations - n_stations}")
 
         nbytes = os.path.getsize(paths["vals"])
         expected = frames * n_stations * 4
@@ -181,17 +214,21 @@ def main():
                 f"{int(np.sum(degenerate))} stations have degenerate {tgt_var} std; "
                 "flooring std to 1e-8"
             )
+        padded_mean = np.zeros(padded_stations, dtype="float32")
+        padded_std = np.ones(padded_stations, dtype="float32")
+        padded_mean[:n_stations] = station_mean.astype("float32")
+        padded_std[:n_stations] = station_std.astype("float32")
         generated.extend(
             [
                 (
-                    station_mean.astype("float32"),
+                    padded_mean,
                     os.path.join(
                         norm_dir,
                         f"mean_hadisd_{tgt_var}_train-{year}-{month:02d}.npy",
                     ),
                 ),
                 (
-                    station_std.astype("float32"),
+                    padded_std,
                     os.path.join(
                         norm_dir,
                         f"std_hadisd_{tgt_var}_train-{year}-{month:02d}.npy",
@@ -200,16 +237,17 @@ def main():
             ]
         )
 
-        # Coordinates are staged per month because the RTMA station network may change.
-        # Their ordering is therefore coupled only to this month's values file.
+        # Keep the real monthly order and append NaN padding to the common size.
         for k in ("lon", "lat", "alt"):
             dst = os.path.join(
                 args.out_dir, f"{tgt_var}_{k}_train-{year}-{month:02d}.npy"
             )
-            plans.append((paths[k], dst))
-        plans.append(
+            padded_coord = np.full(padded_stations, np.nan, dtype="float32")
+            padded_coord[:n_stations] = np.asarray(coords[k], dtype="float32")
+            generated.append((padded_coord, dst))
+        generated_memmaps.append(
             (
-                paths["vals"],
+                vals, frames, n_stations, padded_stations,
                 os.path.join(
                     args.out_dir,
                     f"{tgt_var}_vals_{args.freq_tag}_{year}-{month:02d}.memmap",
@@ -232,7 +270,18 @@ def main():
             print(f"[dry-run] monthly norm {array.shape} -> {dst}")
         else:
             np.save(dst, array)
-            print(f"wrote monthly norm {array.shape} -> {dst}")
+            print(f"wrote padded array {array.shape} -> {dst}")
+    for source, frames, real_stations, padded_stations, dst in generated_memmaps:
+        if args.dry_run:
+            print(f"[dry-run] padded memmap ({frames}, {padded_stations}) -> {dst}")
+        else:
+            output = np.memmap(dst, dtype="float32", mode="w+",
+                               shape=(frames, padded_stations))
+            output[:] = np.nan
+            output[:, :real_stations] = source
+            output.flush()
+            del output
+            print(f"wrote padded memmap ({frames}, {padded_stations}) -> {dst}")
     print(
         f"\nOK: {args.year_month} staged"
         + (f" with {len(warnings)} warning(s) -- review above" if warnings else "")
