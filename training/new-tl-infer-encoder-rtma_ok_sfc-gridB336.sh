@@ -53,7 +53,7 @@ model_data_dir="${data_root}/model_data_dir"
 time_token=${infer_time//[-:]/}          # e.g. 20220115T0600
 output_prefix="${checkpoint%epoch_*}"
 #clt output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-infer-${time_token}/"
-output_dir=${output_prefix}/OK-infer-${time_token}/"
+output_dir=${output_prefix}/OK-infer-${time_token}/
 
 # The trainer only WARNS and skips on a bad weights path (running random weights);
 # fail here instead so a typo can never produce plausible-looking garbage.
