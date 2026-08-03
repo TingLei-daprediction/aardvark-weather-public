@@ -14,9 +14,9 @@ Checks:
   - target norm factors exist, finite, std > 0
   - per month (union of train+val ranges): target memmap and 00z background memmap sizes
     match days_in_month * frames * channels * nlon * nlat * 4 bytes
-  - obs (tas, sh, psl, u, v): static lon/lat/alt coords consistent; per-month vals memmap
-    sized frames x n_stations x 4; per-station norm factors exist with shape (n_stations,)
-    (warns on std <= 0 / non-finite -- see degenerate-station guard discussion)
+  - obs (tas, sh, psl, u, v): monthly lon/lat/alt coordinates agree with each monthly
+    values memmap; monthly normalization mode additionally requires station-aligned mean/std
+    vectors, while the backward-compatible static mode requires existing scalar norm files
   - lat_weights only if the script uses --loss lw_rmse
 
 Usage:
@@ -169,6 +169,9 @@ def main():
     model_path = flags.get("model_data_path", "")
     era5_mode = flags.get("era5_mode", "rtma_ok_sfc")
     time_freq = flags.get("time_freq", "1H")
+    obs_norm_mode = flags.get("obs_norm_mode", "static")
+    if obs_norm_mode not in ("static", "monthly"):
+        err(f"--obs_norm_mode has unsupported value {obs_norm_mode!r}")
     for name, val in [
         ("data_path", data_path),
         ("aux_data_path", aux_path),
@@ -320,27 +323,49 @@ def main():
                 n * 4,
                 f"obs {var} {tag}",
             )
+            if obs_norm_mode == "monthly":
+                for stat in ("mean", "std"):
+                    norm_path = os.path.join(
+                        aux_path,
+                        "norm_factors",
+                        f"{stat}_hadisd_{var}_train-{tag}.npy",
+                    )
+                    if not os.path.isfile(norm_path):
+                        missing(f"obs {var} {tag} {stat}", norm_path)
+                        continue
+                    arr = np.asarray(np.load(norm_path)).reshape(-1)
+                    if arr.shape != (n,):
+                        err(
+                            f"obs {var} {tag} {stat}: shape {arr.shape} != ({n},); "
+                            "monthly norms must follow the monthly station order"
+                        )
+                    elif not np.all(np.isfinite(arr)):
+                        err(f"obs {var} {tag} {stat}: non-finite entries")
+                    elif stat == "std" and np.any(arr <= 0):
+                        err(f"obs {var} {tag} std: non-positive entries")
+                    else:
+                        ok(f"obs {var} {tag} {stat}: shape {arr.shape}")
 
-        # A changing station network cannot use per-station normalization arrays. The
-        # monthly RTMA path requires one station-independent scalar mean/std per variable.
-        for stat in ("mean", "std"):
-            path = os.path.join(aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy")
-            if not os.path.isfile(path):
-                missing(f"obs {var} {stat}", path)
-                continue
-            arr = np.asarray(np.load(path)).reshape(-1)
-            if arr.shape != (1,):
-                err(
-                    f"obs {var} {stat}: shape {arr.shape} != (1,); dynamic monthly "
-                    "coordinates require a station-independent scalar norm"
-                )
-                continue
-            if not np.all(np.isfinite(arr)):
-                err(f"obs {var} {stat}: scalar norm is non-finite")
-            elif stat == "std" and arr[0] <= 1e-6:
-                err(f"obs {var} std: scalar std {arr[0]:.6g} <= 1e-6")
-            else:
-                ok(f"obs {var} {stat}: scalar {arr[0]:.6g}")
+        if obs_norm_mode == "static":
+            # Backward-compatible monthly RTMA mode uses one shared scalar per variable;
+            # all nonmonthly/global loader behavior is unchanged.
+            for stat in ("mean", "std"):
+                path = os.path.join(aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy")
+                if not os.path.isfile(path):
+                    missing(f"obs {var} {stat}", path)
+                    continue
+                arr = np.asarray(np.load(path)).reshape(-1)
+                if arr.shape != (1,):
+                    err(
+                        f"obs {var} {stat}: shape {arr.shape} != (1,); changing monthly "
+                        "coordinates require shared scalar norms in static mode"
+                    )
+                elif not np.all(np.isfinite(arr)):
+                    err(f"obs {var} {stat}: scalar norm is non-finite")
+                elif stat == "std" and arr[0] <= 0:
+                    err(f"obs {var} std: scalar std {arr[0]:.6g} is not positive")
+                else:
+                    ok(f"obs {var} {stat}: scalar {arr[0]:.6g}")
     print("\n" + "=" * 60)
     print(f"{n_ok} checks passed, {len(warnings)} warning(s), {len(errors)} error(s)")
     if errors:
