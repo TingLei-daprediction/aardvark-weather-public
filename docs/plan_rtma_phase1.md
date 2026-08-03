@@ -146,8 +146,8 @@ code/config choices:
 
 1. **Wiring of `rtma_surface`.** Reuse the existing HadISD per-variable path (option A, least
    code) vs. a dedicated `rtma_surface` modality (option B, cleaner). Recommend A for Phase 1.
-2. **Static vs per-sample station locations.** OK surface network is ~fixed -> static-`x`
-   (HadISD pattern) is simplest. (`plan_obs.md` covers per-sample if needed.)
+2. **Month-varying station locations.** The RTMA monthly path loads one coordinate set per
+   variable/month and NaN-pads to a collatable size. This supports evolving membership/order/count.
 3. **Length scale.** Set a small `--cmd_init_ls` for the 2.5 km grid (default ~0.36 deg
    over-smooths). See `plan_obs.md`.
 4. **Grid B.** On the regional grid, decide ViT-at-Grid-A vs keep inner grid (`plan_grids.md`

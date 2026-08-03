@@ -283,43 +283,64 @@ def main():
 
     print("\n== Surface observations ==")
     for var in OBS_VARS:
-        coords = {}
-        for k in ("lon", "lat", "alt"):
-            path = os.path.join(data_path, "hadisd_processed", f"{var}_{k}_train.npy")
-            if os.path.isfile(path):
-                coords[k] = np.load(path)
-            else:
-                missing(f"obs {var}", path)
-        if len(coords) < 3 or len({a.shape for a in coords.values()}) != 1:
-            if len(coords) == 3:
-                err(f"obs {var}: coord shapes differ "
-                    f"{ {k: a.shape for k, a in coords.items()} }")
-            continue
-        n = coords["lon"].shape[0]
-        ok(f"obs {var}: {n} stations")
         for y, m in months:
-            path = os.path.join(data_path, "hadisd_processed",
-                                f"{var}_vals_{freq_tag}_{y}-{m:02d}.memmap")
-            check_memmap(path, days_in_month(y, m) * frames_per_day, n * 4,
-                         f"obs {var} {y}-{m:02d}")
+            tag = f"{y}-{m:02d}"
+            coords = {}
+            for k in ("lon", "lat", "alt"):
+                path = os.path.join(
+                    data_path,
+                    "hadisd_processed",
+                    f"{var}_{k}_train-{tag}.npy",
+                )
+                if os.path.isfile(path):
+                    coords[k] = np.load(path)
+                else:
+                    missing(f"obs {var} {tag}", path)
+            if len(coords) < 3:
+                continue
+            if len({a.shape for a in coords.values()}) != 1:
+                err(
+                    f"obs {var} {tag}: coord shapes differ "
+                    f"{ {k: a.shape for k, a in coords.items()} }"
+                )
+                continue
+            if coords["lon"].ndim != 1 or coords["lon"].size == 0:
+                err(f"obs {var} {tag}: coordinates must be nonempty 1-D arrays")
+                continue
+            n = coords["lon"].shape[0]
+            ok(f"obs {var} {tag}: {n} stations")
+            path = os.path.join(
+                data_path,
+                "hadisd_processed",
+                f"{var}_vals_{freq_tag}_{tag}.memmap",
+            )
+            check_memmap(
+                path,
+                days_in_month(y, m) * frames_per_day,
+                n * 4,
+                f"obs {var} {tag}",
+            )
+
+        # A changing station network cannot use per-station normalization arrays. The
+        # monthly RTMA path requires one station-independent scalar mean/std per variable.
         for stat in ("mean", "std"):
             path = os.path.join(aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy")
             if not os.path.isfile(path):
                 missing(f"obs {var} {stat}", path)
                 continue
-            arr = np.load(path)
-            if arr.shape != (n,):
-                err(f"obs {var} {stat}: shape {arr.shape} != ({n},)")
+            arr = np.asarray(np.load(path)).reshape(-1)
+            if arr.shape != (1,):
+                err(
+                    f"obs {var} {stat}: shape {arr.shape} != (1,); dynamic monthly "
+                    "coordinates require a station-independent scalar norm"
+                )
                 continue
-            n_nonfinite = (~np.isfinite(arr)).sum()
-            note = f", {n_nonfinite} non-finite (masked stations)" if n_nonfinite else ""
-            ok(f"obs {var} {stat}: shape {arr.shape}{note}")
-            if stat == "std":
-                n_bad = int((arr[np.isfinite(arr)] <= 1e-6).sum())
-                if n_bad:
-                    warn(f"obs {var} std: {n_bad} station(s) <= 1e-6 -- apply the "
-                         "degenerate-station guard (std -> median station std)")
-
+            if not np.all(np.isfinite(arr)):
+                err(f"obs {var} {stat}: scalar norm is non-finite")
+            elif stat == "std" and arr[0] <= 1e-6:
+                err(f"obs {var} std: scalar std {arr[0]:.6g} <= 1e-6")
+            else:
+                ok(f"obs {var} {stat}: scalar {arr[0]:.6g}")
     print("\n" + "=" * 60)
     print(f"{n_ok} checks passed, {len(warnings)} warning(s), {len(errors)} error(s)")
     if errors:

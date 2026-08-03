@@ -89,6 +89,7 @@ class WeatherDataset(Dataset):
         disable_igra=False,
         time_freq="6H",
         obs_set="all",
+        obs_norm_mode="static",
     ):
 
         super().__init__()
@@ -110,6 +111,11 @@ class WeatherDataset(Dataset):
         # "all" = full Aardvark set; "rtma_surface" = surface obs only (tas, sh, psl, u, v).
         self.obs_set = obs_set
         self.surface_only = obs_set == "rtma_surface"
+        self.obs_norm_mode = obs_norm_mode
+        if self.obs_norm_mode not in ("static", "monthly"):
+            raise ValueError(
+                f"unknown obs_norm_mode={self.obs_norm_mode!r}; expected 'static' or 'monthly'"
+            )
         # Per-month file layout (ERA5-type indexing) for the RTMA surface sub-daily paths (15-min
         # and 1-hour). When active, obs and target are stored one file per month and addressed by
         # month_frame(); the offset machinery (build_offsets) is bypassed -- alignment is
@@ -117,6 +123,11 @@ class WeatherDataset(Dataset):
         # datasets can coexist in one data_path.
         self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(self.time_freq)
         self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
+        if self.obs_norm_mode == "monthly" and not self.monthly:
+            raise ValueError(
+                "--obs_norm_mode monthly is supported only by the monthly RTMA surface "
+                "path (--obs_set rtma_surface with --time_freq 15min or 1H)"
+            )
         # The sub-daily cadences are only wired through the per-month rtma_surface path; other obs
         # sets still use the global-obs/offset logic and have no per-month layout. Fail clearly.
         if self.time_freq in ("15min", "1H") and not self.monthly:
@@ -723,31 +734,100 @@ class WeatherDataset(Dataset):
         self._background_channels = channels
         return background
 
-    def _load_obs_monthly(self, var, stations):
-        """Open per-month surface-obs value memmaps for one variable, keyed by (year, month).
+    def _load_obs_monthly(self, var, mode):
+        """Open per-month coordinates and values for one surface-observation variable.
 
-        Each month file is ``(days_in_month * frames_per_day, stations)``; the frame count is
-        hard-asserted so obs and target stay aligned.
+        Coordinate files are month-specific because station membership, ordering, and count
+        may evolve. Each values memmap is opened with the station count from the SAME month's
+        coordinate files. ``max_stations`` is returned so samples can be NaN-padded to one
+        collatable size when a batch spans multiple months.
         """
-        out = {}
-        per_frame = stations * 4
+        coordinates = {}
+        altitudes = {}
+        values = {}
+        max_stations = 0
+        obs_dir = os.path.join(self.data_path, "hadisd_processed")
         for (year, month) in self._month_keys():
-            path = os.path.join(
-                self.data_path,
-                "hadisd_processed",
-                f"{var}_vals_{self.freq_tag}_{year}-{month:02d}.memmap",
+            key = (year, month)
+            tag = f"{year}-{month:02d}"
+            coord_paths = {
+                component: os.path.join(
+                    obs_dir, f"{var}_{component}_{mode}-{tag}.npy"
+                )
+                for component in ("lon", "lat", "alt")
+            }
+            missing = [path for path in coord_paths.values() if not os.path.isfile(path)]
+            if missing:
+                raise FileNotFoundError(
+                    f"missing month-specific {var} coordinate file(s) for {tag}: {missing}"
+                )
+            lon = np.asarray(np.load(coord_paths["lon"])).reshape(-1)
+            lat = np.asarray(np.load(coord_paths["lat"])).reshape(-1)
+            alt = np.asarray(np.load(coord_paths["alt"])).reshape(-1)
+            if lon.size == 0 or lon.shape != lat.shape or lon.shape != alt.shape:
+                raise ValueError(
+                    f"{var} coordinate mismatch for {tag}: "
+                    f"lon={lon.shape}, lat={lat.shape}, alt={alt.shape}"
+                )
+            stations = lon.size
+            max_stations = max(max_stations, stations)
+            coordinates[key] = (
+                np.stack([lon_to_0_360(lon), lat], axis=-1) / LATLON_SCALE_FACTOR
             )
-            nbytes = os.path.getsize(path)
+            altitudes[key] = alt
+
+            path = os.path.join(
+                obs_dir, f"{var}_vals_{self.freq_tag}_{tag}.memmap"
+            )
             frames_expected = days_in_month(year, month) * self.frames_per_day
+            per_frame = stations * 4
+            nbytes = os.path.getsize(path)
             if nbytes != frames_expected * per_frame:
                 raise AssertionError(
-                    f"{path}: {nbytes // per_frame} frames != expected {frames_expected} "
-                    f"(days_in_month*{self.frames_per_day}); check the per-month obs file"
+                    f"{path}: size implies {nbytes / per_frame:g} frames for "
+                    f"{stations} stations, expected {frames_expected}; coordinates and "
+                    "values for each month must use the same station ordering/count"
                 )
-            out[(year, month)] = np.memmap(
+            values[key] = np.memmap(
                 path, dtype="float32", mode="r", shape=(frames_expected, stations)
             )
-        return out
+        return coordinates, altitudes, values, max_stations
+
+    def _load_obs_norms_monthly(self, var, mode, coordinates):
+        """Load station-aligned mean/std vectors for each monthly observation network."""
+        means = {}
+        stds = {}
+        norm_dir = os.path.join(self.aux_data_path, "norm_factors")
+        for key, coords in coordinates.items():
+            year, month = key
+            tag = f"{year}-{month:02d}"
+            mean_path = os.path.join(
+                norm_dir, f"mean_hadisd_{var}_{mode}-{tag}.npy"
+            )
+            std_path = os.path.join(
+                norm_dir, f"std_hadisd_{var}_{mode}-{tag}.npy"
+            )
+            if not os.path.isfile(mean_path) or not os.path.isfile(std_path):
+                raise FileNotFoundError(
+                    f"monthly observation norms missing for {var} {tag}: "
+                    f"expected {mean_path} and {std_path}"
+                )
+            mean = np.asarray(np.load(mean_path), dtype=np.float32).reshape(-1)
+            std = np.asarray(np.load(std_path), dtype=np.float32).reshape(-1)
+            stations = int(coords.shape[0])
+            if mean.shape != (stations,) or std.shape != (stations,):
+                raise ValueError(
+                    f"monthly observation norm mismatch for {var} {tag}: "
+                    f"stations={stations}, mean={mean.shape}, std={std.shape}; "
+                    "norm vectors must follow the monthly coordinate/value station order"
+                )
+            if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)):
+                raise ValueError(f"non-finite monthly observation norms for {var} {tag}")
+            if np.any(std <= 0):
+                raise ValueError(f"non-positive monthly observation std for {var} {tag}")
+            means[key] = mean
+            stds[key] = std
+        return means, stds
 
     def load_hadisd(self, mode):
         """
@@ -763,27 +843,37 @@ class WeatherDataset(Dataset):
             hadisd_vars = ["tas", "sh", "psl", "u", "v"]
         else:
             hadisd_vars = ["tas", "tds", "psl", "u", "v"]
+        self.hadisd_max_stations = []
         for var in hadisd_vars:
-            lon = lon_to_0_360(
-                np.load(
-                    self.data_path + "hadisd_processed/{}_lon_{}.npy".format(var, mode)
-                )
-            )
-            lat = np.load(
-                self.data_path + "hadisd_processed/{}_lat_{}.npy".format(var, mode)
-            )
-            alt = np.load(
-                self.data_path + "hadisd_processed/{}_alt_{}.npy".format(var, mode)
-            )
             if self.monthly:
-                # Per-month value files: {var}_vals_<freq_tag>_<YYYY>-<MM>.memmap (freq_tag is
-                # "15min" or "1h"). Coords above stay static (single file); only the values are
-                # per-month.
-                stations = lon.shape[0]
-                vals = self._load_obs_monthly(var, stations)
+                coords, alt, vals, max_stations = self._load_obs_monthly(var, mode)
+                self.hadisd_x.append(coords)
+                self.hadisd_alt.append(alt)
+                self.hadisd_y.append(vals)
+                self.hadisd_max_stations.append(max_stations)
+                station_counts = [coord.shape[0] for coord in coords.values()]
+                typical = float(np.median(station_counts))
+                print(
+                    f"[INFO] {var} monthly stations: min={min(station_counts)} "
+                    f"median={typical:g} max={max_stations} "
+                    f"max/median padding ratio={max_stations / typical:.3f}"
+                )
             else:
+                lon = lon_to_0_360(
+                    np.load(
+                        self.data_path
+                        + "hadisd_processed/{}_lon_{}.npy".format(var, mode)
+                    )
+                )
+                lat = np.load(
+                    self.data_path + "hadisd_processed/{}_lat_{}.npy".format(var, mode)
+                )
+                alt = np.load(
+                    self.data_path + "hadisd_processed/{}_alt_{}.npy".format(var, mode)
+                )
                 vals_path = (
-                    self.data_path + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode)
+                    self.data_path
+                    + "hadisd_processed/{}_vals_{}.memmap".format(var, self.mode)
                 )
                 if self.time_freq == "6H":
                     shape = get_hadisd_shape(mode)
@@ -791,36 +881,50 @@ class WeatherDataset(Dataset):
                     stations = lon.shape[0]
                     time_dim = self._infer_time_dim(vals_path, [stations])
                     shape = (time_dim, stations)
-                vals = np.memmap(
-                    vals_path,
-                    dtype="float32",
-                    mode="r",
-                    shape=shape,
+                vals = np.memmap(vals_path, dtype="float32", mode="r", shape=shape)
+                self.hadisd_x.append(
+                    np.stack([lon, lat], axis=-1) / LATLON_SCALE_FACTOR
                 )
-
-            self.hadisd_x.append(np.stack([lon, lat], axis=-1) / LATLON_SCALE_FACTOR)
-            self.hadisd_alt.append(alt)
-            self.hadisd_y.append(vals)
-
+                self.hadisd_alt.append(alt)
+                self.hadisd_y.append(vals)
         if not self.monthly:
             self.hadisd_index_offset = self.offsets["hadisd"][self.start_date]
 
-        self.hadisd_means = [
-            self.to_tensor(
+        self.hadisd_means = []
+        self.hadisd_stds = []
+        for var_index, var in enumerate(hadisd_vars):
+            if self.monthly and self.obs_norm_mode == "monthly":
+                mean, std = self._load_obs_norms_monthly(
+                    var, mode, self.hadisd_x[var_index]
+                )
+                self.hadisd_means.append(mean)
+                self.hadisd_stds.append(std)
+                continue
+            mean = np.asarray(
                 np.load(
                     self.aux_data_path + "norm_factors/mean_hadisd_{}.npy".format(var)
                 )
-            )
-            for var in hadisd_vars
-        ]
-        self.hadisd_stds = [
-            self.to_tensor(
+            ).reshape(-1)
+            std = np.asarray(
                 np.load(
                     self.aux_data_path + "norm_factors/std_hadisd_{}.npy".format(var)
                 )
-            )
-            for var in hadisd_vars
-        ]
+            ).reshape(-1)
+            if self.monthly and (mean.size != 1 or std.size != 1):
+                raise ValueError(
+                    f"dynamic monthly station coordinates require station-independent "
+                    f"scalar norms for {var}; got mean shape {mean.shape}, std shape "
+                    f"{std.shape}. Recompute norms over all training-month values."
+                )
+            if mean.shape != std.shape or not np.all(np.isfinite(mean)) or not np.all(
+                np.isfinite(std)
+            ) or np.any(std <= 0):
+                raise ValueError(
+                    f"invalid HadISD norms for {var}: mean shape {mean.shape}, "
+                    f"std shape {std.shape}; values must be finite and std positive"
+                )
+            self.hadisd_means.append(self.to_tensor(mean))
+            self.hadisd_stds.append(self.to_tensor(std))
 
         return
 
@@ -937,6 +1041,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         disable_igra=False,
         time_freq="6H",
         obs_set="all",
+        obs_norm_mode="static",
     ):
 
         super().__init__(
@@ -953,6 +1058,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             disable_igra=disable_igra,
             time_freq=time_freq,
             obs_set=obs_set,
+            obs_norm_mode=obs_norm_mode,
         )
 
         # Setup
@@ -1087,21 +1193,51 @@ class WeatherDatasetAssimilation(WeatherDataset):
         date = self.dates[index]
 
         # HadISD (always loaded -- the surface obs used by both obs_set modes)
-        x_context_hadisd = self.hadisd_x
         if self.monthly:
-            # Per-month values: each hadisd_y entry is a {(year, month): memmap} dict; read the
-            # SAME (month, frame) the target uses so obs and target stay aligned.
+            # Select coordinates and values from the SAME month. Pad each variable to its
+            # maximum station count over this dataset so the default DataLoader can collate
+            # batches that contain samples from different months. NaN coordinates/values are
+            # explicitly masked by convDeepSet and therefore contribute zero density/value.
             (m_year, m_month), frame_in_month = month_frame(date, self.step_minutes)
-            y_context_hadisd = [
-                v[(m_year, m_month)][frame_in_month, :] for v in self.hadisd_y
-            ]
+            month_key = (m_year, m_month)
+            x_context_hadisd = []
+            y_context_hadisd = []
+            for var_index, (coords_by_month, values_by_month, max_stations) in enumerate(
+                zip(self.hadisd_x, self.hadisd_y, self.hadisd_max_stations)
+            ):
+                coords = np.asarray(coords_by_month[month_key])
+                values = np.asarray(values_by_month[month_key][frame_in_month, :])
+                if coords.shape != (values.size, 2):
+                    raise ValueError(
+                        f"monthly observation coordinate/value mismatch for {month_key}: "
+                        f"coords={coords.shape}, values={values.shape}"
+                    )
+                if self.obs_norm_mode == "monthly":
+                    mean = self.hadisd_means[var_index][month_key]
+                    std = self.hadisd_stds[var_index][month_key]
+                    if mean.shape != values.shape or std.shape != values.shape:
+                        raise ValueError(
+                            f"monthly observation value/norm mismatch for {month_key}: "
+                            f"values={values.shape}, mean={mean.shape}, std={std.shape}"
+                        )
+                    # Station-dependent vectors match only the real monthly network, so
+                    # normalize before padding to the cross-month collatable length.
+                    values = (values - mean) / std
+                padded_coords = np.full((max_stations, 2), np.nan, dtype=np.float32)
+                padded_values = np.full(max_stations, np.nan, dtype=np.float32)
+                padded_coords[: values.size, :] = coords
+                padded_values[: values.size] = values
+                x_context_hadisd.append(padded_coords)
+                y_context_hadisd.append(padded_values)
         else:
+            x_context_hadisd = self.hadisd_x
             y_context_hadisd = [
                 i[index + self.hadisd_index_offset, :] for i in self.hadisd_y
             ]
         x_context_hadisd = [self.to_tensor(i).permute(1, 0) for i in x_context_hadisd]
         y_context_hadisd = [self.to_tensor(i) for i in y_context_hadisd]
-        y_context_hadisd = self.norm_hadisd(y_context_hadisd)
+        if not (self.monthly and self.obs_norm_mode == "monthly"):
+            y_context_hadisd = self.norm_hadisd(y_context_hadisd)
 
         # ERA5
         era5 = self.to_tensor(self.load_era5_time(index))

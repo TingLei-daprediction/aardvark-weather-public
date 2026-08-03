@@ -187,6 +187,7 @@ def main(rank, world_size, output_dir, args):
             disable_igra=bool(args.disable_igra),
             time_freq=args.time_freq,
             obs_set=args.obs_set,
+            obs_norm_mode=args.obs_norm_mode,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -203,6 +204,7 @@ def main(rank, world_size, output_dir, args):
             disable_igra=bool(args.disable_igra),
             time_freq=args.time_freq,
             obs_set=args.obs_set,
+            obs_norm_mode=args.obs_norm_mode,
         )
 
     # Case 2: training processor
@@ -496,6 +498,13 @@ if __name__ == "__main__":
         choices=["all", "rtma_surface"],
         help="Observation set: 'all' = full Aardvark modalities; "
         "'rtma_surface' = surface obs only (tas, sh, psl, u, v).",
+    )
+    parser.add_argument(
+        "--obs_norm_mode",
+        default="static",
+        choices=["static", "monthly"],
+        help="Surface-observation normalization: 'static' keeps existing norm files; "
+        "'monthly' uses station-aligned mean/std vectors for each RTMA month.",
     )
     parser.add_argument("--time_freq", default="1D")
     parser.add_argument("--amsua_channels", type=int, default=None)

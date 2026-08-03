@@ -68,8 +68,23 @@ def main():
         if not os.path.isfile(std_path):
             print(f"\n{var}: no std file at {std_path} -- skipped")
             continue
-        std = np.load(std_path)
-        mean = np.load(mean_path) if os.path.isfile(mean_path) else np.full_like(std, np.nan)
+        std = np.asarray(np.load(std_path)).reshape(-1)
+        mean = (
+            np.asarray(np.load(mean_path)).reshape(-1)
+            if os.path.isfile(mean_path)
+            else np.full_like(std, np.nan)
+        )
+        if std.size == 1:
+            print(
+                f"\n===== {var}: station-independent scalar normalization "
+                f"mean={mean[0]:.6g}, std={std[0]:.6g} ====="
+            )
+            if not np.isfinite(mean[0]) or not np.isfinite(std[0]) or std[0] <= args.eps:
+                any_risk = True
+                print("  --> INVALID scalar normalization; recompute training-month norms")
+            else:
+                print("  Per-station degeneracy diagnostics do not apply to scalar norms.")
+            continue
         flagged = np.where(~np.isfinite(std) | (std <= args.eps))[0]
         print(f"\n===== {var}: {std.shape[0]} stations, {flagged.size} degenerate =====")
         if flagged.size == 0:

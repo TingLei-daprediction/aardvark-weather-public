@@ -92,8 +92,8 @@ helpers `era5_month_path` / `background_month_path`, `grid_config.py:148-155`):
   `data_path`** without collision.
 - **The background carries NO cadence tag** -- one 00z frame per day is cadence-independent, so
   **the background files already built for the 1H run serve a 15-minute run unchanged.**
-- Station **coordinates stay static** (`{var}_lon/lat/alt_train.npy`, loaded once); only the
-  *values* are per-month.
+- Station coordinates and values are both per-month. Coordinate names are
+  `{var}_{lon,lat,alt}_train-<YYYY>-<MM>.npy`, allowing station membership/order/count to evolve.
 - **No `_train`/`_val`/`_test` split tag.** Train/val/test are selected purely by
   `start_date`/`end_date`, matching existing behavior (`hadisd_mode="train"` for both datasets).
 
@@ -166,7 +166,7 @@ Conventions:
 - `<MM>` is **zero-padded** (`01`..`12`); `<YYYY>-<MM>` identical for obs, target, background.
 - **Frame 0 of each month = day 1, 00:00**; cadence exact, ascending, no gaps.
 - Target/obs/background **channel order is identical** (the 5 surface fields, same order as obs).
-- Obs station **coords are static** single files (`{var}_lon/lat/alt_train.npy`), NOT per-month.
+- Obs station coordinates are per-month and must match the same month's values columns exactly.
 - Background is the **00z field per actual day**, stored **normalized** with the target mean/std.
 - `era5_mode = rtma_ok_sfc` (channel count inferred from file size by the loader).
 

@@ -250,10 +250,11 @@ def load_observations(
     frames_expected: int,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Path]:
     obs_dir = data_root / "hadisd_processed"
-    lon_path = obs_dir / f"{variable}_lon_train.npy"
-    lat_path = obs_dir / f"{variable}_lat_train.npy"
-    alt_path = obs_dir / f"{variable}_alt_train.npy"
-    value_path = obs_dir / f"{variable}_vals_{freq_tag}_{year}-{month:02d}.memmap"
+    month_tag = f"{year}-{month:02d}"
+    lon_path = obs_dir / f"{variable}_lon_train-{month_tag}.npy"
+    lat_path = obs_dir / f"{variable}_lat_train-{month_tag}.npy"
+    alt_path = obs_dir / f"{variable}_alt_train-{month_tag}.npy"
+    value_path = obs_dir / f"{variable}_vals_{freq_tag}_{month_tag}.memmap"
 
     for label, path in (("longitude", lon_path), ("latitude", lat_path), ("altitude", alt_path)):
         if not path.is_file():
