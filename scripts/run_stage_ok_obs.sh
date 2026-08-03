@@ -15,9 +15,10 @@ data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
 out_dir="${data_root}/hadisd_processed"
 
 # Months whose files should be staged.
-months=(2022-01 2022-02)
+months=(2022-01 2022-02  2022-03)
 
 for ym in "${months[@]}"; do
+#jfor ym in 2022-01 2022-02; do
   src_dir="${src_root}/${ym//-/}/surface_processed"
   echo "==================== ${ym} ===================="
   python "${script_dir}/stage_ok_obs_month.py" \
