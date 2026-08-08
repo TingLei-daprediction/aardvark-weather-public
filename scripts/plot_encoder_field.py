@@ -240,7 +240,30 @@ def main():
         default="",
         help="Optional title prefix, for example a variable name like t850",
     )
+    parser.add_argument(
+        "--fig_width",
+        type=float,
+        default=20.0,
+        help="Figure width in inches (default: 20).",
+    )
+    parser.add_argument(
+        "--fig_height",
+        type=float,
+        default=6.5,
+        help="Figure height in inches (default: 6.5).",
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=180,
+        help="Output resolution in dots per inch (default: 180).",
+    )
     args = parser.parse_args()
+
+    if args.fig_width <= 0 or args.fig_height <= 0:
+        raise ValueError("--fig_width and --fig_height must be positive")
+    if args.dpi <= 0:
+        raise ValueError("--dpi must be positive")
 
     run_dir = Path(args.run_dir)
     grid_dir = Path(args.grid_dir)
@@ -295,7 +318,11 @@ def main():
         print("[WARN] Cartopy not installed; plotting standard grid axes without map borders.")
 
     fig, axes = plt.subplots(
-        1, 3, figsize=(14, 4.5), constrained_layout=True, subplot_kw=subplot_kwargs
+        1,
+        3,
+        figsize=(args.fig_width, args.fig_height),
+        constrained_layout=True,
+        subplot_kw=subplot_kwargs,
     )
 
     imshow_kwargs = {"origin": "lower"}
@@ -337,7 +364,7 @@ def main():
         var_tag = sanitize_filename(short_code)
         out_path = run_dir / f"sample_{args.sample_index}_{var_tag}_ch{args.channel}.png"
 
-    fig.savefig(out_path, dpi=150)
+    fig.savefig(out_path, dpi=args.dpi)
     plt.close(fig)
 
     print(f"Wrote {out_path}")
