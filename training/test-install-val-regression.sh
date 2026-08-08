@@ -23,7 +23,8 @@
 # it; its own #SBATCH lines are inert comments.
 #
 # Usage:
-#   sbatch test-install-val-regression.sh <base_dir>
+#clt   sbatch test-install-val-regression.sh <base_dir>
+#clt hardwired base_dir now
 #SBATCH -A fv3-cam
 #SBATCH -J av-ok-sfc-valreg-install
 #SBATCH -p u1-h100
@@ -40,8 +41,9 @@
 
 set -euo pipefail
 
-base_dir="${1:?usage: $0 <base_dir>}"
-base_dir="${base_dir%/}"
+#clt base_dir="${1:?usage: $0 <base_dir>}"
+#clt base_dir="${base_dir%/}"
+base_dir=/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-basedir
 
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd "$rundir"
