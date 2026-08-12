@@ -30,7 +30,11 @@ except ImportError:
     HAS_METPY_COUNTIES = False
 
 
-DEFAULT_GRID_DIR = "/scratch3/NCEPDEV/fv3-cam/Annette.Gibbs/aardvark_OK/aardvark-weather-public/data/grid_lon_lat"
+# Holds urma_x_ok.npy / urma_y_ok.npy -- the same pair the model reads via the grid config's
+# model_x/model_y entries (model_data_path + "grid_lon_lat/"). If these are not found the script
+# falls back to pixel-index axes, and Cartopy then draws the field on a global map, which looks
+# plausible but is geographically wrong. Override with --grid_dir for other domains.
+DEFAULT_GRID_DIR = "/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data/model_data_dir/grid_lon_lat"
 
 PRESSURE_LEVELS_4U = [850, 700, 500, 200]
 PRESSURE_VARS_4U = [
@@ -310,12 +314,24 @@ def main():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    if HAS_CARTOPY:
+    # Only draw a map when real coordinates were loaded. Without them the field is drawn in
+    # pixel indices, and a Cartopy axes would interpret those as degrees -- producing a
+    # convincing but geographically wrong map (an OK field rendered over Asia). Plain
+    # matplotlib axes make the fallback obvious instead.
+    use_cartopy = HAS_CARTOPY and grid_extent is not None
+    if use_cartopy:
         proj = ccrs.PlateCarree()
         subplot_kwargs = {"projection": proj}
     else:
+        proj = None
         subplot_kwargs = {}
-        print("[WARN] Cartopy not installed; plotting standard grid axes without map borders.")
+        if not HAS_CARTOPY:
+            print("[WARN] Cartopy not installed; plotting index axes without map borders.")
+        else:
+            print(
+                "[WARN] No grid coordinates loaded; plotting index axes without map borders. "
+                "Pass --grid_dir to get a georeferenced plot."
+            )
 
     fig, axes = plt.subplots(
         1,
@@ -339,10 +355,9 @@ def main():
     axes[2].set_title(f"Prediction - Truth\nRMSE={rmse:.6g}, Bias={bias:.6g}")
 
     for ax in axes:
-        if HAS_CARTOPY:
+        if use_cartopy:
             add_geospatial_features(ax)
-            if grid_extent:
-                ax.set_extent(grid_extent, crs=proj)
+            ax.set_extent(grid_extent, crs=proj)
         else:
             ax.set_xlabel("x index")
             ax.set_ylabel("y index")
