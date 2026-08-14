@@ -8,6 +8,7 @@ import os
 import sys
 import pickle
 import argparse
+import shutil
 
 import numpy as np
 import torch
@@ -30,6 +31,7 @@ from grid_config import (
     DEFAULT_CONFIG_PATH,
     assert_grid_files_consistent,
 )
+from month_manifest import format_months, read_month_manifest
 
 
 sys.path.append("../npw/data")
@@ -188,6 +190,7 @@ def main(rank, world_size, output_dir, args):
             time_freq=args.time_freq,
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
+            selected_months=args.assim_train_months_resolved,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -205,6 +208,7 @@ def main(rank, world_size, output_dir, args):
             time_freq=args.time_freq,
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
+            selected_months=args.assim_val_months_resolved,
         )
 
     # Case 2: training processor
@@ -523,6 +527,18 @@ if __name__ == "__main__":
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
     parser.add_argument("--assim_val_end_date", default="2019-12-31")
+    parser.add_argument(
+        "--assim_train_months_file",
+        default=None,
+        help="Optional text file listing selected assimilation training months, one exact "
+        "YYYY-MM per line. Blank lines and lines beginning with # are ignored.",
+    )
+    parser.add_argument(
+        "--assim_val_months_file",
+        default=None,
+        help="Optional text file listing selected assimilation validation months, one exact "
+        "YYYY-MM per line. For single-timestamp inference this may be omitted.",
+    )
     parser.add_argument("--forecast_train_start_date", default="2007-01-02")
     parser.add_argument("--forecast_train_end_date", default="2017-12-31")
     parser.add_argument("--forecast_val_start_date", default="2019-01-01")
@@ -537,12 +553,60 @@ if __name__ == "__main__":
     parser.add_argument("--var", default=None)
     args = parser.parse_args()
 
+    if (
+        args.assim_train_months_file or args.assim_val_months_file
+    ) and args.mode != "assimilation":
+        parser.error("assimilation month manifests are supported only with --mode assimilation")
+
+    try:
+        train_months = (
+            read_month_manifest(
+                args.assim_train_months_file, "--assim_train_months_file"
+            )
+            if args.assim_train_months_file
+            else None
+        )
+        val_months = (
+            read_month_manifest(args.assim_val_months_file, "--assim_val_months_file")
+            if args.assim_val_months_file
+            else None
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
+
+    # Preserve canonical values in config.pkl; workers receive these directly rather than
+    # reparsing files whose contents could change after the run starts.
+    args.assim_train_months_resolved = (
+        format_months(train_months) if train_months else None
+    )
+    args.assim_val_months_resolved = format_months(val_months) if val_months else None
+
+    if train_months and val_months:
+        overlap = sorted(set(train_months) & set(val_months))
+        if overlap:
+            print(
+                "[WARN] assimilation training and validation month manifests overlap: "
+                + " ".join(format_months(overlap))
+                + "; validation will not measure independent generalization.",
+                flush=True,
+            )
+
     torch.device("cuda")
 
     # Create results directory
     output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
+
+    # Keep the source manifests with the run in addition to recording their resolved values.
+    for source, destination_name in (
+        (args.assim_train_months_file, "selected_train_months.txt"),
+        (args.assim_val_months_file, "selected_val_months.txt"),
+    ):
+        if source:
+            destination = os.path.join(output_dir, destination_name)
+            if os.path.abspath(source) != os.path.abspath(destination):
+                shutil.copy2(source, destination)
 
     # Save config
     with open(output_dir + "/config.pkl", "wb") as f:

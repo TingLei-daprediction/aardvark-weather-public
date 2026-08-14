@@ -90,6 +90,7 @@ class WeatherDataset(Dataset):
         time_freq="6H",
         obs_set="all",
         obs_norm_mode="static",
+        selected_months=None,
     ):
 
         super().__init__()
@@ -123,6 +124,18 @@ class WeatherDataset(Dataset):
         # datasets can coexist in one data_path.
         self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(self.time_freq)
         self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
+        self.selected_months = (
+            {tuple(map(int, value.split("-"))) for value in selected_months}
+            if selected_months
+            else None
+        )
+        if self.selected_months is not None and not self.monthly:
+            raise ValueError(
+                "selected months are supported only by the monthly RTMA surface path "
+                "(--obs_set rtma_surface with --time_freq 1H or 15min)"
+            )
+        if self.selected_months is not None and self.filter_dates is not None:
+            raise ValueError("selected months cannot be combined with filter_dates")
         if self.obs_norm_mode == "monthly" and not self.monthly:
             raise ValueError(
                 "--obs_norm_mode monthly is supported only by the monthly RTMA surface "
@@ -150,6 +163,44 @@ class WeatherDataset(Dataset):
             self.index = np.array([i for i, d in enumerate(self.dates) if d.month >= 7])
         else:
             self.index = np.array(range(len(self.dates)))
+        if self.selected_months is not None:
+            available_months = {(date.year, date.month) for date in self.dates}
+            outside = sorted(self.selected_months - available_months)
+            if outside:
+                outside_text = " ".join(
+                    f"{year:04d}-{month:02d}" for year, month in outside
+                )
+                raise ValueError(
+                    f"selected month(s) {outside_text} do not intersect start_date="
+                    f"{self.start_date} through end_date={self.end_date}"
+                )
+            self.index = np.asarray(
+                [
+                    index
+                    for index in self.index
+                    if (self.dates[index].year, self.dates[index].month)
+                    in self.selected_months
+                ],
+                dtype=np.int64,
+            )
+            if self.index.size == 0:
+                selected_text = " ".join(
+                    f"{year:04d}-{month:02d}"
+                    for year, month in sorted(self.selected_months)
+                )
+                raise ValueError(
+                    f"no samples remain for selected months {selected_text}; "
+                    f"start={self.start_date} end={self.end_date} time_freq={self.time_freq}"
+                )
+            print(
+                "[INFO] selected months: "
+                + " ".join(
+                    f"{year:04d}-{month:02d}"
+                    for year, month in sorted(self.selected_months)
+                )
+                + f"; samples={self.index.size}",
+                flush=True,
+            )
         if self.index.size == 0:
             print(
                 f"[WARN] Empty date index: start={self.start_date} end={self.end_date} "
@@ -638,9 +689,8 @@ class WeatherDataset(Dataset):
         return
 
     def _month_keys(self):
-        """List of (year, month) tuples spanned by the run's date range (per-month files)."""
-        periods = pd.period_range(self.start_date, self.end_date, freq="M")
-        return [(p.year, p.month) for p in periods]
+        """List the months represented by the effective (possibly filtered) sample index."""
+        return sorted({(self.dates[i].year, self.dates[i].month) for i in self.index})
 
     def _era5_month_path(self, year, month):
         # Name comes from the grid-config "era5_month" template (override in the YAML to
@@ -1042,6 +1092,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         time_freq="6H",
         obs_set="all",
         obs_norm_mode="static",
+        selected_months=None,
     ):
 
         super().__init__(
@@ -1059,6 +1110,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             time_freq=time_freq,
             obs_set=obs_set,
             obs_norm_mode=obs_norm_mode,
+            selected_months=selected_months,
         )
 
         # Setup

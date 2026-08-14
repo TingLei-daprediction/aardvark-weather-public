@@ -13,7 +13,7 @@ Example
 -------
 python scripts/compute_ok_obs_scalar_norms.py \
   --data_root /path/to/dr-av-rtma_ok_data \
-  --months 2022-01 2022-02 \
+  --months_file configs/rtma_train_months.txt \
   --freq_tag 1h
 
 Outputs
@@ -24,9 +24,14 @@ Outputs
 
 import argparse
 import calendar
+import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "aardvark"))
+from month_manifest import parse_month as parse_manifest_month
+from month_manifest import read_month_manifest
 
 
 VARIABLES = ("tas", "sh", "psl", "u", "v")
@@ -35,23 +40,25 @@ FRAMES_PER_DAY = {"1h": 24, "15min": 96}
 
 def parse_month(value):
     try:
-        year_text, month_text = value.split("-")
-        year, month = int(year_text), int(month_text)
-        calendar.monthrange(year, month)
-    except (ValueError, TypeError):
-        raise argparse.ArgumentTypeError(f"invalid month {value!r}; use YYYY-MM")
-    return year, month
+        return parse_manifest_month(value, source="--months")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc))
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data_root", required=True)
-    parser.add_argument(
+    month_group = parser.add_mutually_exclusive_group(required=True)
+    month_group.add_argument(
         "--months",
         nargs="+",
-        required=True,
         type=parse_month,
         help="training months only, for example 2022-01 2022-02",
+    )
+    month_group.add_argument(
+        "--months_file",
+        help="Text file listing training months, one exact YYYY-MM per line; blank lines "
+        "and lines beginning with # are ignored.",
     )
     parser.add_argument("--freq_tag", default="1h", choices=sorted(FRAMES_PER_DAY))
     parser.add_argument("--vars", nargs="+", default=list(VARIABLES), choices=VARIABLES)
@@ -61,7 +68,13 @@ def parse_args():
     )
     parser.add_argument("--chunk_frames", type=int, default=96)
     parser.add_argument("--dry_run", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.months_file:
+        try:
+            args.months = read_month_manifest(args.months_file, "--months_file")
+        except (FileNotFoundError, ValueError) as exc:
+            parser.error(str(exc))
+    return args
 
 
 def main():
