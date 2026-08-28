@@ -24,6 +24,7 @@ Outputs
 
 import argparse
 import calendar
+import os
 import sys
 from pathlib import Path
 
@@ -36,6 +37,30 @@ from month_manifest import read_month_manifest
 
 VARIABLES = ("tas", "sh", "psl", "u", "v")
 FRAMES_PER_DAY = {"1h": 24, "15min": 96}
+
+
+def save_native_norm(path, array, dry_run=False):
+    """Write a real norm file rather than following a legacy output symlink.
+
+    ``numpy.save`` follows an existing symbolic link.  Some staged datasets have links such
+    as ``mean_hadisd_sh.npy -> mean_surface_q.npy``; saving through that path would overwrite
+    the legacy ``surface`` file and leave the loader-facing name as a symlink.  Remove only
+    the link itself before writing so this utility always creates the documented
+    ``*_hadisd_*.npy`` output while leaving the former link target untouched.
+    """
+    if path.is_symlink():
+        link_target = os.readlink(str(path))
+        if dry_run:
+            print(f"  [dry-run] would replace symlink {path} -> {link_target}")
+        else:
+            print(f"  replacing symlink {path} -> {link_target}")
+            path.unlink()
+
+    if dry_run:
+        print(f"  [dry-run] would write regular file {path}")
+    else:
+        np.save(path, array)
+        print(f"  wrote regular file {path}")
 
 
 def parse_month(value):
@@ -144,13 +169,8 @@ def main():
         mean_path = out_dir / f"mean_hadisd_{variable}.npy"
         std_path = out_dir / f"std_hadisd_{variable}.npy"
         print(f"  combined: count={count}, mean={mean:.8g}, std={std:.8g}")
-        if args.dry_run:
-            print(f"  [dry-run] would write {mean_path} and {std_path}")
-        else:
-            np.save(mean_path, mean_array)
-            np.save(std_path, std_array)
-            print(f"  wrote {mean_path}")
-            print(f"  wrote {std_path}")
+        save_native_norm(mean_path, mean_array, dry_run=args.dry_run)
+        save_native_norm(std_path, std_array, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
