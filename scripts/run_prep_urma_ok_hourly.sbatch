@@ -26,12 +26,13 @@ set -euo pipefail
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 # URMA grib archive: <input_dir>/<YYYYMMDD>/urma2p5.t<HH>z.2dvar{anl,ges}_OK.grb2  -- EDIT ME
-input_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-raw-2p5"
+#cltorg input_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-raw-2p5"
+input_dir="/scratch3/NCEPDEV/gpu-emc-ai/Annette.Gibbs/aardvark_OK/OK_data/urma2p5_OK_grb2"
 # Output data_path for the OK runs (era5/ and norm_factors/ created under it)
 data_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
 
 start="2022-01"
-end="2022-06"
+end="2023-12"
 
 cd "$repo"
 

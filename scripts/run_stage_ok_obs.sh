@@ -10,12 +10,15 @@ set -euo pipefail
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-src_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-annette/aardvark_OK/OK_data"
+#clt src_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-annette/aardvark_OK/OK_data"
+src_root="/scratch3/NCEPDEV/gpu-emc-ai/Annette.Gibbs/aardvark_OK/OK_data"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
 out_dir="${data_root}/hadisd_processed"
 
 # Months whose files should be staged.
-months=(2022-01 2022-02  2022-03)
+#clt for 2022 and 2023
+months=({2022..2023}-{01..12})
+#clt months=(2022-01 2022-02  2022-03)
 
 declare -A max_stations=()
 for ym in "${months[@]}"; do
