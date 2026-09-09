@@ -8,6 +8,8 @@ import os
 import sys
 import pickle
 import argparse
+import random
+import math
 import shutil
 
 import numpy as np
@@ -120,7 +122,17 @@ def main(rank, world_size, output_dir, args):
     """
     Primary training script for the encoder, processor and decoder modules.
     """
-
+    if args.assim_val_stride < 1:
+        raise ValueError("--assim_val_stride must be positive")
+    if (
+        args.time_freq == "1H"
+        and args.assim_val_stride > 1
+        and math.gcd(args.assim_val_stride, 24) != 1
+    ):
+        raise ValueError(
+            "--assim_val_stride must be coprime with 24 for 1H data so validation "
+            "does not alias onto a subset of UTC hours"
+        )
     master_port = args.master_port
     lead_time = args.lead_time
     era5_mode = args.era5_mode
@@ -128,6 +140,13 @@ def main(rank, world_size, output_dir, args):
         raise ValueError("--obs_set rtma_surface currently supports only --two_frames 0")
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
+    if args.seed is not None:
+        # Keep model initialization identical across A/B runs. NumPy/Python receive a rank offset
+        # so rank-local sampling remains reproducible without duplicating its random stream.
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        np.random.seed(args.seed + rank)
+        random.seed(args.seed + rank)
 
     # Install the grid config (era5_x/era5_y file names, inner ViT grid) for this process,
     # before any dataset or model is built. int_x/int_y come from the YAML unless overridden
@@ -190,7 +209,9 @@ def main(rank, world_size, output_dir, args):
             time_freq=args.time_freq,
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
+            background_mode=args.background_mode,
             selected_months=args.assim_train_months_resolved,
+            sample_stride=1,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -208,7 +229,9 @@ def main(rank, world_size, output_dir, args):
             time_freq=args.time_freq,
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
+            background_mode=args.background_mode,
             selected_months=args.assim_val_months_resolved,
+            sample_stride=args.assim_val_stride,
         )
 
     # Case 2: training processor
@@ -437,6 +460,7 @@ def main(rank, world_size, output_dir, args):
         train_sampler,
         weight_decay=args.weight_decay,
         weights_path=weights_dir,
+        resume_training=bool(args.resume_training),
         tune_film=args.film,
     )
 
@@ -451,6 +475,12 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir")
     parser.add_argument("--mode")
     parser.add_argument("--weights_dir")
+    parser.add_argument(
+        "--resume_training",
+        type=int,
+        default=0,
+        help="Restore optimizer/scheduler/epoch state from --weights_dir and continue training.",
+    )
     parser.add_argument("--in_channels", type=int)
     parser.add_argument("--out_channels", type=int)
     parser.add_argument("--int_channels", type=int)
@@ -510,6 +540,13 @@ if __name__ == "__main__":
         help="Surface-observation normalization: 'static' keeps existing norm files; "
         "'monthly' uses station-aligned mean/std vectors for each RTMA month.",
     )
+    parser.add_argument(
+        "--background_mode",
+        default="daily_00z",
+        choices=["daily_00z", "hourly"],
+        help="RTMA background cadence: persist the daily 00 UTC first guess (default) "
+        "or use the first guess valid at each sample hour.",
+    )
     parser.add_argument("--time_freq", default="1D")
     parser.add_argument("--amsua_channels", type=int, default=None)
     parser.add_argument("--amsub_channels", type=int, default=None)
@@ -517,6 +554,12 @@ if __name__ == "__main__":
     parser.add_argument("--ascat_channels", type=int, default=None)
     parser.add_argument("--hirs_channels", type=int, default=None)
     parser.add_argument("--debug_nan_checks", type=int, default=0)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional base random seed; omitted preserves the existing stochastic behavior.",
+    )
     parser.add_argument(
         "--cmd_init_ls",
         type=float,
@@ -527,6 +570,13 @@ if __name__ == "__main__":
     parser.add_argument("--assim_train_end_date", default="2017-12-31")
     parser.add_argument("--assim_val_start_date", default="2019-01-01")
     parser.add_argument("--assim_val_end_date", default="2019-12-31")
+    parser.add_argument(
+        "--assim_val_stride",
+        type=int,
+        default=1,
+        help="Keep every Nth assimilation validation timestamp. For 1H data, N must be "
+        "coprime with 24 to retain every UTC hour (default: every timestamp).",
+    )
     parser.add_argument(
         "--assim_train_months_file",
         default=None,

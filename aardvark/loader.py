@@ -18,6 +18,7 @@ from grid_config import (
     era5_memmap_path,
     era5_month_path,
     background_month_path,
+    background_hourly_month_path,
 )
 
 
@@ -90,7 +91,9 @@ class WeatherDataset(Dataset):
         time_freq="6H",
         obs_set="all",
         obs_norm_mode="static",
+        background_mode="daily_00z",
         selected_months=None,
+        sample_stride=1,
     ):
 
         super().__init__()
@@ -117,6 +120,12 @@ class WeatherDataset(Dataset):
             raise ValueError(
                 f"unknown obs_norm_mode={self.obs_norm_mode!r}; expected 'static' or 'monthly'"
             )
+        self.background_mode = background_mode
+        if self.background_mode not in ("daily_00z", "hourly"):
+            raise ValueError(
+                f"unknown background_mode={self.background_mode!r}; expected "
+                "'daily_00z' or 'hourly'"
+            )
         # Per-month file layout (ERA5-type indexing) for the RTMA surface sub-daily paths (15-min
         # and 1-hour). When active, obs and target are stored one file per month and addressed by
         # month_frame(); the offset machinery (build_offsets) is bypassed -- alignment is
@@ -129,6 +138,9 @@ class WeatherDataset(Dataset):
             if selected_months
             else None
         )
+        if sample_stride < 1:
+            raise ValueError(f"sample_stride must be positive, got {sample_stride}")
+        self.sample_stride = sample_stride
         if self.selected_months is not None and not self.monthly:
             raise ValueError(
                 "selected months are supported only by the monthly RTMA surface path "
@@ -140,6 +152,13 @@ class WeatherDataset(Dataset):
             raise ValueError(
                 "--obs_norm_mode monthly is supported only by the monthly RTMA surface "
                 "path (--obs_set rtma_surface with --time_freq 15min or 1H)"
+            )
+        if self.background_mode == "hourly" and (
+            not self.monthly or self.time_freq != "1H"
+        ):
+            raise ValueError(
+                "--background_mode hourly requires the monthly RTMA surface 1-hour path "
+                "(--obs_set rtma_surface with --time_freq 1H)"
             )
         # The sub-daily cadences are only wired through the per-month rtma_surface path; other obs
         # sets still use the global-obs/offset logic and have no per-month layout. Fail clearly.
@@ -199,6 +218,12 @@ class WeatherDataset(Dataset):
                     for year, month in sorted(self.selected_months)
                 )
                 + f"; samples={self.index.size}",
+                flush=True,
+            )
+        if self.sample_stride > 1:
+            self.index = self.index[:: self.sample_stride]
+            print(
+                f"[INFO] sample stride={self.sample_stride}; samples={self.index.size}",
                 flush=True,
             )
         if self.index.size == 0:
@@ -736,18 +761,25 @@ class WeatherDataset(Dataset):
         return era5
 
     def _background_month_path(self, year, month):
-        # Name comes from the grid-config "background_month" template (see _era5_month_path).
-        return background_month_path(self.data_path, self.era5_mode, year, month)
+        # Daily and hourly products have distinct names so neither can be opened with the
+        # other's shape accidentally. The daily path remains the backward-compatible default.
+        path_helper = (
+            background_hourly_month_path
+            if self.background_mode == "hourly"
+            else background_month_path
+        )
+        return path_helper(self.data_path, self.era5_mode, year, month)
 
     def _load_background_monthly(self):
-        """Open per-month daily 00z BACKGROUND memmaps keyed by (year, month).
+        """Open per-month BACKGROUND memmaps keyed by (year, month).
 
-        This populates the encoder's "climatology" input slot on the rtma_surface 15-min path,
-        but it is a date-specific daily 00z background/prior -- NOT a multi-year climatology.
-        Each month is ``(days_in_month, C, nlon, nlat)`` with ONE 00z frame per day. The field is
+        This populates the encoder's "climatology" input slot on the monthly rtma_surface path,
+        but it is a date-specific background/prior -- NOT a multi-year climatology.
+        Daily mode stores one 00z frame per day; hourly mode stores 24 valid-time-matched frames
+        per day. The field is
         expected to be **already normalized at build time with the TARGET mean/std** (loader
-        feeds it as-is, like the climatology slot today). Hard-asserts (review point 6):
-        frames == days_in_month, C == target channels, spatial == (nlon, nlat).
+        feeds it as-is, like the climatology slot today). File size, channel count, and spatial
+        shape are hard-asserted before training.
         """
         background = {}
         target_channels = getattr(self, "era5_channels", None)
@@ -757,29 +789,31 @@ class WeatherDataset(Dataset):
             path = self._background_month_path(year, month)
             nbytes = os.path.getsize(path)
             days = days_in_month(year, month)
+            frames_expected = days * (24 if self.background_mode == "hourly" else 1)
             if channels is None:
-                denom = days * per_frame
+                denom = frames_expected * per_frame
                 if denom == 0 or nbytes % denom != 0:
                     raise ValueError(
                         f"{path}: size {nbytes} not divisible by (days*nlon*nlat*4)={denom} "
-                        f"(days={days}, nlon={self.nlon}, nlat={self.nlat})"
+                        f"(frames={frames_expected}, nlon={self.nlon}, nlat={self.nlat})"
                     )
                 channels = nbytes // denom
                 if target_channels is not None and channels != target_channels:
                     raise AssertionError(
                         f"{path}: background channels {channels} != target channels "
-                        f"{target_channels}; the 00z background must match the target fields"
+                        f"{target_channels}; the background must match the target fields"
                     )
-            if nbytes != days * channels * per_frame:
+            if nbytes != frames_expected * channels * per_frame:
                 raise AssertionError(
-                    f"{path}: {nbytes // (channels * per_frame)} frames != expected {days} "
-                    "(days_in_month); the 00z background must have exactly one frame per day"
+                    f"{path}: {nbytes // (channels * per_frame)} frames != expected "
+                    f"{frames_expected} "
+                    f"for background_mode={self.background_mode}"
                 )
             background[(year, month)] = np.memmap(
                 path,
                 dtype="float32",
                 mode="r",
-                shape=(days, channels, self.nlon, self.nlat),
+                shape=(frames_expected, channels, self.nlon, self.nlat),
             )
         self._background_channels = channels
         return background
@@ -1092,7 +1126,9 @@ class WeatherDatasetAssimilation(WeatherDataset):
         time_freq="6H",
         obs_set="all",
         obs_norm_mode="static",
+        background_mode="daily_00z",
         selected_months=None,
+        sample_stride=1,
     ):
 
         super().__init__(
@@ -1110,7 +1146,9 @@ class WeatherDatasetAssimilation(WeatherDataset):
             time_freq=time_freq,
             obs_set=obs_set,
             obs_norm_mode=obs_norm_mode,
+            background_mode=background_mode,
             selected_months=selected_months,
+            sample_stride=sample_stride,
         )
 
         # Setup
@@ -1133,15 +1171,16 @@ class WeatherDatasetAssimilation(WeatherDataset):
             return self.index.shape[0]
         return super().__len__()
 
-    def load_era5_time(self, index):
+    def load_era5_time(self, index, month_key=None, frame_in_month=None):
         """
         ERA5 ground truth data loading
         """
 
         date = self.dates[index]
         if self.monthly:
-            (year, month), frame_in_month = month_frame(date, self.step_minutes)
-            era5 = self.era5_sfc[(year, month)][frame_in_month, ...]
+            if month_key is None or frame_in_month is None:
+                month_key, frame_in_month = month_frame(date, self.step_minutes)
+            era5 = self.era5_sfc[month_key][frame_in_month, ...]
         else:
             year = date.year
             if self.time_freq == "6H":
@@ -1251,6 +1290,10 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
         index = self.index[index]
         date = self.dates[index]
+        month_key = None
+        frame_in_month = None
+        if self.monthly:
+            month_key, frame_in_month = month_frame(date, self.step_minutes)
 
         # HadISD (always loaded -- the surface obs used by both obs_set modes)
         if self.monthly:
@@ -1258,8 +1301,6 @@ class WeatherDatasetAssimilation(WeatherDataset):
             # maximum station count over this dataset so the default DataLoader can collate
             # batches that contain samples from different months. NaN coordinates/values are
             # explicitly masked by convDeepSet and therefore contribute zero density/value.
-            (m_year, m_month), frame_in_month = month_frame(date, self.step_minutes)
-            month_key = (m_year, m_month)
             x_context_hadisd = []
             y_context_hadisd = []
             for var_index, (coords_by_month, values_by_month, max_stations) in enumerate(
@@ -1300,16 +1341,22 @@ class WeatherDatasetAssimilation(WeatherDataset):
             y_context_hadisd = self.norm_hadisd(y_context_hadisd)
 
         # ERA5
-        era5 = self.to_tensor(self.load_era5_time(index))
+        era5 = self.to_tensor(
+            self.load_era5_time(index, month_key, frame_in_month)
+        )
         era5_target = era5.permute(2, 1, 0)
         era5_x = self.era5_x
 
         # AUxiliary variables
         aux_time = self.to_tensor(self.get_time_aux(date))
         if self.monthly:
-            # Normalized daily 00z background/prior (reuses the climatology slot; NOT a multi-year
-            # climatology). All 96 intraday samples of a day share that day's 00z field.
-            climatology = self.background[(date.year, date.month)][date.day - 1, ...]
+            # The background reuses the model-facing climatology slot. Daily mode persists 00z.
+            # Hourly mode uses the exact same month_frame result as observations and targets,
+            # keeping all three inputs on one alignment path.
+            background_index = date.day - 1
+            if self.background_mode == "hourly":
+                background_index = frame_in_month
+            climatology = self.background[month_key][background_index, ...]
         elif self.time_freq == "6H":
             climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
         else:

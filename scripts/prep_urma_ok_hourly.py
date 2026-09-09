@@ -1,11 +1,12 @@
 """
-Build the hourly RTMA-OK target and daily 00z background memmaps from URMA grib2 files.
+Build hourly RTMA-OK targets and daily-00z or hourly backgrounds from URMA grib2 files.
 
 Inputs: URMA 2.5 km files ALREADY interpolated to the target OK lat-lon grid (no
 interpolation is done here), organized one directory per day:
 
   <input_dir>/<YYYYMMDD>/urma2p5.t<HH>z.2dvaranl_OK.grb2   (hourly analysis -> TARGET)
   <input_dir>/<YYYYMMDD>/urma2p5.t00z.2dvarges_OK.grb2     (00z first guess -> BACKGROUND)
+  <input_dir>/<YYYYMMDD>/urma2p5.t<HH>z.2dvarges_OK.grb2   (hourly-mode BACKGROUND)
 
 Each grib2 file carries the 5 surface fields on a regular lat-lon grid scanned WE:SN
 (lon fastest, south->north), e.g. 331 x 171 for the OK box.
@@ -21,6 +22,11 @@ Outputs (the loader's per-month contract for time_freq=1H, see docs/plan_rtma_15
       NOT read by the loader directly: run scripts/normalize_background.py afterwards to
       produce background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap (normalized with target mean/std).
       The background name carries NO freq tag: one 00z frame/day is cadence-independent.
+
+  <output_dir>/era5/background_raw_hourly_rtma_ok_sfc_1_<YYYY>-<MM>.memmap
+      (days_in_month * 24, 5, nlon, nlat) float32, RAW hour-matched first guesses.
+      This is written only with ``--background_mode hourly`` and normalized separately to
+      ``background_hourly_rtma_ok_sfc_1_<YYYY>-<MM>.memmap``.
 
   <output_dir>/norm_factors/mean_rtma_ok_sfc_1.npy, std_rtma_ok_sfc_1.npy   (--write_norms)
       Per-channel mean/std over all processed TARGET frames. Only pass --write_norms when
@@ -61,6 +67,7 @@ Then normalize the background (needs the norm factors from --write_norms):
       --era5_mode rtma_ok_sfc --months 2022-01 2022-02 2022-03 2022-04 2022-05 2022-06
 Other options: --fill_missing persist (fill isolated gaps from the previous frame; default is
 abort listing all missing files), --skip_time_check, --anl_pattern / --ges_pattern.
+Use --background_only --grid_source files to add backgrounds without rewriting existing targets.
 """
 
 import argparse
@@ -89,7 +96,7 @@ CHANNELS = len(VAR_SPECS)
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="URMA grib2 -> per-month hourly target + daily 00z background memmaps (RTMA OK)"
+        description="URMA grib2 -> per-month hourly target + selectable background memmaps (RTMA OK)"
     )
     p.add_argument("--input_dir", required=True, help="Root dir containing <YYYYMMDD>/ day dirs")
     p.add_argument("--output_dir", required=True, help="Base data_path (era5/ and norm_factors/ under it)")
@@ -123,8 +130,16 @@ def parse_args():
     )
     p.add_argument(
         "--ges_pattern",
-        default="urma2p5.t00z.2dvarges_OK.grb2",
-        help="00z first-guess filename within a day dir",
+        default=None,
+        help="First-guess filename within a day dir. Defaults to t00z in daily_00z mode "
+        "and t{hour:02d}z in hourly mode.",
+    )
+    p.add_argument(
+        "--background_mode",
+        default="daily_00z",
+        choices=["daily_00z", "hourly"],
+        help="Write the existing one-frame-per-day 00 UTC background or a distinct "
+        "24-frames-per-day hour-matched background product.",
     )
     p.add_argument(
         "--fill_missing",
@@ -137,6 +152,12 @@ def parse_args():
         action="store_true",
         help="Write norm_factors/mean|std_rtma_ok_sfc_1.npy from the processed target frames "
         "(only when processing the training period)",
+    )
+    p.add_argument(
+        "--background_only",
+        action="store_true",
+        help="Write only the selected background product. Requires existing grid files and "
+        "does not rewrite targets or target norm factors.",
     )
     p.add_argument(
         "--skip_time_check",
@@ -276,19 +297,30 @@ def read_frame(path, lon, lat, expected_ymdh, skip_time_check):
     return frame
 
 
-def prescan(input_dir, months, anl_pattern, ges_pattern, fill_missing):
+def prescan(
+    input_dir,
+    months,
+    anl_pattern,
+    ges_pattern,
+    background_mode,
+    fill_missing,
+    background_only=False,
+):
     """Verify every expected file exists before writing anything; list ALL gaps at once."""
     missing = []
     for year, month in months:
         for day in range(1, calendar.monthrange(year, month)[1] + 1):
             ddir = Path(input_dir) / f"{year:04d}{month:02d}{day:02d}"
-            for hour in range(FRAMES_PER_DAY):
-                fp = ddir / anl_pattern.format(hour=hour)
-                if not fp.exists():
-                    missing.append(str(fp))
-            gp = ddir / ges_pattern
-            if not gp.exists():
-                missing.append(str(gp))
+            if not background_only:
+                for hour in range(FRAMES_PER_DAY):
+                    fp = ddir / anl_pattern.format(hour=hour)
+                    if not fp.exists():
+                        missing.append(str(fp))
+            background_hours = range(FRAMES_PER_DAY) if background_mode == "hourly" else (0,)
+            for hour in background_hours:
+                gp = ddir / ges_pattern.format(hour=hour)
+                if not gp.exists():
+                    missing.append(str(gp))
     if missing:
         print(f"[{'WARN' if fill_missing == 'persist' else 'ERROR'}] {len(missing)} missing files:")
         for m in missing:
@@ -303,6 +335,18 @@ def prescan(input_dir, months, anl_pattern, ges_pattern, fill_missing):
 
 def main():
     args = parse_args()
+    if args.ges_pattern is None:
+        args.ges_pattern = (
+            "urma2p5.t{hour:02d}z.2dvarges_OK.grb2"
+            if args.background_mode == "hourly"
+            else "urma2p5.t00z.2dvarges_OK.grb2"
+        )
+    if args.background_mode == "hourly" and "{hour" not in args.ges_pattern:
+        raise SystemExit("hourly background mode requires {hour} in --ges_pattern")
+    if args.background_only and args.grid_source != "files":
+        raise SystemExit("--background_only requires --grid_source files")
+    if args.background_only and args.write_norms:
+        raise SystemExit("--background_only cannot be combined with --write_norms")
     months = month_range(args.start, args.end)
     grid_dir = Path(args.grid_dir or os.path.join(args.output_dir, args.name_root))
     x_path = grid_dir / f"{args.name_root}_x_{args.grid_tag}.npy"
@@ -341,7 +385,15 @@ def main():
     era5_dir.mkdir(parents=True, exist_ok=True)
     print(f"Grid: nlon={nlon} lon {lon[0]:.4f}..{lon[-1]:.4f}, nlat={nlat} lat {lat[0]:.4f}..{lat[-1]:.4f}")
 
-    missing = prescan(args.input_dir, months, args.anl_pattern, args.ges_pattern, args.fill_missing)
+    missing = prescan(
+        args.input_dir,
+        months,
+        args.anl_pattern,
+        args.ges_pattern,
+        args.background_mode,
+        args.fill_missing,
+        args.background_only,
+    )
 
     # Running per-channel sums over TARGET frames only (float64, same as prep_era5_truth.py)
     sum_c = np.zeros(CHANNELS, dtype=np.float64)
@@ -351,41 +403,102 @@ def main():
     for year, month in months:
         days = calendar.monthrange(year, month)[1]
         tgt_path = era5_dir / f"{args.name_root}_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
-        bg_path = era5_dir / f"background_raw_{ERA5_MODE}_1_{year}-{month:02d}.memmap"
-        tgt = np.memmap(tgt_path, dtype="float32", mode="w+", shape=(days * FRAMES_PER_DAY, CHANNELS, nlon, nlat))
-        bg = np.memmap(bg_path, dtype="float32", mode="w+", shape=(days, CHANNELS, nlon, nlat))
+        bg_stem = "background_raw_hourly" if args.background_mode == "hourly" else "background_raw"
+        bg_path = era5_dir / f"{bg_stem}_{ERA5_MODE}_1_{year}-{month:02d}.memmap"
+        background_frames = days * (24 if args.background_mode == "hourly" else 1)
+        tgt = None
+        if not args.background_only:
+            tgt = np.memmap(
+                tgt_path,
+                dtype="float32",
+                mode="w+",
+                shape=(days * FRAMES_PER_DAY, CHANNELS, nlon, nlat),
+            )
+        bg = np.memmap(
+            bg_path,
+            dtype="float32",
+            mode="w+",
+            shape=(background_frames, CHANNELS, nlon, nlat),
+        )
 
         prev_frame = None
+        prev_background = None
         for day in range(1, days + 1):
             ddir = Path(args.input_dir) / f"{year:04d}{month:02d}{day:02d}"
             for hour in range(FRAMES_PER_DAY):
-                fp = ddir / args.anl_pattern.format(hour=hour)
                 idx = (day - 1) * FRAMES_PER_DAY + hour
-                if str(fp) in missing:
-                    if prev_frame is None:
-                        raise SystemExit(f"{fp}: missing with no previous frame to persist from")
-                    print(f"[FILL] {fp} missing -> persisted previous frame into row {idx}")
-                    frame = prev_frame
+                if not args.background_only:
+                    fp = ddir / args.anl_pattern.format(hour=hour)
+                    if str(fp) in missing:
+                        if prev_frame is None:
+                            raise SystemExit(
+                                f"{fp}: missing with no previous frame to persist from"
+                            )
+                        print(f"[FILL] {fp} missing -> persisted previous frame into row {idx}")
+                        frame = prev_frame
+                    else:
+                        expected = f"{year:04d}{month:02d}{day:02d}{hour:02d}"
+                        frame = read_frame(
+                            fp, lon, lat, expected, args.skip_time_check
+                        )
+                    tgt[idx] = frame
+                    prev_frame = frame
+                    sum_c += frame.sum(axis=(1, 2), dtype=np.float64)
+                    sumsq_c += np.square(frame, dtype=np.float64).sum(axis=(1, 2))
+                    count_c += nlon * nlat
+
+                if args.background_mode == "hourly":
+                    gp = ddir / args.ges_pattern.format(hour=hour)
+                    if str(gp) in missing:
+                        if prev_background is None:
+                            raise SystemExit(
+                                f"{gp}: missing with no previous background to persist from"
+                            )
+                        print(f"[FILL] {gp} missing -> persisted previous background into row {idx}")
+                        background_frame = prev_background
+                    else:
+                        expected = f"{year:04d}{month:02d}{day:02d}{hour:02d}"
+                        background_frame = read_frame(
+                            gp, lon, lat, expected, args.skip_time_check
+                        )
+                    bg[idx] = background_frame
+                    prev_background = background_frame
+
+            if args.background_mode == "daily_00z":
+                gp = ddir / args.ges_pattern.format(hour=0)
+                if str(gp) in missing:
+                    if args.background_only:
+                        raise SystemExit(
+                            f"{gp}: --background_only cannot fill from an analysis; "
+                            "provide a complete background archive"
+                        )
+                    print(f"[FILL] {gp} missing -> persisted 00z ANALYSIS of the day as background")
+                    bg[day - 1] = tgt[(day - 1) * FRAMES_PER_DAY]
                 else:
-                    frame = read_frame(fp, lon, lat, f"{year:04d}{month:02d}{day:02d}{hour:02d}", args.skip_time_check)
-                tgt[idx] = frame
-                prev_frame = frame
-                sum_c += frame.sum(axis=(1, 2), dtype=np.float64)
-                sumsq_c += np.square(frame, dtype=np.float64).sum(axis=(1, 2))
-                count_c += nlon * nlat
+                    bg[day - 1] = read_frame(
+                        gp,
+                        lon,
+                        lat,
+                        f"{year:04d}{month:02d}{day:02d}00",
+                        args.skip_time_check,
+                    )
 
-            gp = ddir / args.ges_pattern
-            if str(gp) in missing:
-                print(f"[FILL] {gp} missing -> persisted 00z ANALYSIS of the day as background")
-                bg[day - 1] = tgt[(day - 1) * FRAMES_PER_DAY]
-            else:
-                bg[day - 1] = read_frame(gp, lon, lat, f"{year:04d}{month:02d}{day:02d}00", args.skip_time_check)
-
-        tgt.flush()
+        if tgt is not None:
+            tgt.flush()
         bg.flush()
-        del tgt, bg
-        print(f"[OK] {year}-{month:02d}: {tgt_path.name} ({days * FRAMES_PER_DAY}, {CHANNELS}, {nlon}, {nlat}), "
-              f"{bg_path.name} ({days}, {CHANNELS}, {nlon}, {nlat})")
+        del bg
+        if tgt is not None:
+            del tgt
+            print(
+                f"[OK] {year}-{month:02d}: {tgt_path.name} "
+                f"({days * FRAMES_PER_DAY}, {CHANNELS}, {nlon}, {nlat}), "
+                f"{bg_path.name} ({background_frames}, {CHANNELS}, {nlon}, {nlat})"
+            )
+        else:
+            print(
+                f"[OK] {year}-{month:02d}: {bg_path.name} "
+                f"({background_frames}, {CHANNELS}, {nlon}, {nlat})"
+            )
 
     if args.write_norms:
         norms_dir = Path(args.output_dir) / "norm_factors"
@@ -399,9 +512,16 @@ def main():
         for (name, *_), m, s in zip(VAR_SPECS, mean, std):
             print(f"     {name:4s} mean={m:.6g} std={s:.6g}")
 
-    print("\nNext: python scripts/normalize_background.py --data_dir", args.output_dir,
-          "--era5_mode", ERA5_MODE, "--months",
-          " ".join(f"{y}-{m:02d}" for y, m in months))
+    print(
+        "\nNext: python scripts/normalize_background.py --data_dir",
+        args.output_dir,
+        "--era5_mode",
+        ERA5_MODE,
+        "--background_mode",
+        args.background_mode,
+        "--months",
+        " ".join(f"{y}-{m:02d}" for y, m in months),
+    )
 
 
 if __name__ == "__main__":

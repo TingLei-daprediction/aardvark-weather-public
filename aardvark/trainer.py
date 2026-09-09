@@ -33,6 +33,7 @@ class DDPTrainer:
         weight_decay,
         test_loader=None,
         weights_path=None,
+        resume_training=False,
         tune_film=False,
     ):
         self.rank = rank
@@ -45,8 +46,11 @@ class DDPTrainer:
         self.loss_function = loss_function
         self.best_loss = 1000
         self.test_loader = test_loader
+        self.resume_training = resume_training
 
-        self._load_weights_if_provided(weights_path)
+        checkpoint = self._load_weights_if_provided(weights_path)
+        if self.resume_training and checkpoint is None:
+            raise ValueError("resume_training requires a readable checkpoint file")
 
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
@@ -68,16 +72,19 @@ class DDPTrainer:
         self.losses = []
         self.train_losses = []
         self.maes = []
+        self.start_epoch = 0
+        if self.resume_training:
+            self._restore_training_state(checkpoint)
 
     def _load_weights_if_provided(self, weights_path):
         if not weights_path:
-            return
+            return None
         if not os.path.exists(weights_path):
             print(f"Warning: weights path not found, skipping load: {weights_path}")
-            return
+            return None
         if os.path.isdir(weights_path):
             print(f"Warning: weights path is a directory, skipping load: {weights_path}")
-            return
+            return None
 
         checkpoint = torch.load(weights_path, map_location="cpu")
         if isinstance(checkpoint, dict):
@@ -98,6 +105,62 @@ class DDPTrainer:
         # rather than silently run with randomly-initialized weights -- essential for
         # eval-only/inference runs (--epoch 0), where wrong output would look plausible.
         self.model.load_state_dict(state_dict, strict=True)
+        return checkpoint
+
+    def _restore_training_state(self, checkpoint):
+        required = ("epoch", "optimizer_state_dict")
+        missing = [key for key in required if key not in checkpoint]
+        if missing:
+            raise ValueError(f"resume checkpoint missing training state: {missing}")
+        self.opt.load_state_dict(checkpoint["optimizer_state_dict"])
+        device = torch.device("cuda", self.rank)
+        for state in self.opt.state.values():
+            for key, value in state.items():
+                if torch.is_tensor(value):
+                    state[key] = value.to(device)
+        if hasattr(self, "scheduler"):
+            if "scheduler_state_dict" not in checkpoint:
+                raise ValueError("resume checkpoint missing scheduler_state_dict")
+            self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        self.start_epoch = int(checkpoint["epoch"]) + 1
+        self.best_loss = float(checkpoint.get("best_loss", checkpoint.get("loss", 1000)))
+        for attribute, filename in (
+            ("losses", f"losses_{self.rank}.npy"),
+            ("train_losses", f"train_losses_{self.rank}.npy"),
+        ):
+            path = os.path.join(self.save_path, filename)
+            if os.path.isfile(path):
+                # checkpoint_last is authoritative. A job can die after writing a history
+                # entry but before atomically replacing checkpoint_last; discard that orphan
+                # entry so history index N continues to correspond to epoch_N.
+                setattr(
+                    self,
+                    attribute,
+                    np.load(path).tolist()[: self.start_epoch],
+                )
+        print(
+            f"[INFO] rank {self.rank} resuming at epoch {self.start_epoch} "
+            f"with best_loss={self.best_loss:.6g}",
+            flush=True,
+        )
+
+    def _checkpoint_state(self, epoch, loss):
+        state = {
+            "epoch": epoch,
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.opt.state_dict(),
+            "loss": loss,
+            "best_loss": self.best_loss,
+        }
+        if hasattr(self, "scheduler"):
+            state["scheduler_state_dict"] = self.scheduler.state_dict()
+        return state
+
+    def _save_last_checkpoint(self, epoch, loss):
+        path = os.path.join(self.save_path, "checkpoint_last")
+        temporary = path + ".tmp"
+        torch.save(self._checkpoint_state(epoch, loss), temporary)
+        os.replace(temporary, path)
 
     def _unravel_to_numpy(self, x):
         return x.view(-1).detach().cpu().numpy()
@@ -261,16 +324,22 @@ class DDPTrainer:
         subprocess.run(["cp", "reproduce_training.sh", f"{self.save_path}"])
 
         train_loss = []
-        ll = []
+        rmse_path = os.path.join(self.save_path, f"rmse_{self.rank}.npy")
+        ll = (
+            np.load(rmse_path).tolist()[: self.start_epoch]
+            if self.resume_training and os.path.isfile(rmse_path)
+            else []
+        )
 
         fix_sigma = False
         prev_step = None
 
-        self.epoch = 0
-        epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, 0)
-        train_loss = np.mean(train_loss)
+        if self.start_epoch == 0:
+            self.epoch = 0
+            epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, 0)
+            train_loss = np.mean(train_loss)
 
-        for epoch in range(n_epochs):
+        for epoch in range(self.start_epoch, n_epochs):
             self.epoch = epoch
 
             self.sampler.set_epoch(epoch)
@@ -393,6 +462,9 @@ class DDPTrainer:
                     )
                 except:
                     pass
+
+            if self.rank == 0:
+                self._save_last_checkpoint(epoch, epoch_loss)
 
 
 class DDPTrainerE2E:

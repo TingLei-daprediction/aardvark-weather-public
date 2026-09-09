@@ -75,6 +75,7 @@ data_files:
   # Per-month files (sub-daily rtma_surface path):
   era5_month: "urma/urma_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap"
   background_month: "urma/background_{era5_mode}_1_{year}-{month:02d}.memmap"
+  background_hourly_month: "urma/background_hourly_{era5_mode}_1_{year}-{month:02d}.memmap"
   lat_weights: "lat_weights/weights_lat_ok.npy"
 
 # Inner ViT grid (Grid B) -- REDUCED. Even, >= Grid A (331 x 171), and exactly divisible by

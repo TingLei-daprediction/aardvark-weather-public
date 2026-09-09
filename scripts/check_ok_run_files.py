@@ -12,8 +12,8 @@ Checks:
   - grid axes under data_path and model_data_path exist and match (values, not just shape)
   - elev_vars file exists with shape (4, nlat, nlon)
   - target norm factors exist, finite, std > 0
-  - per month (union of train+val ranges): target memmap and 00z background memmap sizes
-    match days_in_month * frames * channels * nlon * nlat * 4 bytes
+  - per month (union of train+val ranges): target and selected daily/hourly background memmap
+    sizes match days_in_month * frames * channels * nlon * nlat * 4 bytes
   - obs (tas, sh, psl, u, v): monthly lon/lat/alt coordinates agree with each monthly
     values memmap; monthly normalization mode additionally requires station-aligned mean/std
     vectors, while the backward-compatible static mode requires existing scalar norm files
@@ -28,7 +28,7 @@ import calendar
 import os
 import re
 import sys
-from datetime import date
+from datetime import datetime
 
 import numpy as np
 
@@ -47,6 +47,7 @@ from grid_config import (  # noqa: E402
     norm_std_path,
     era5_month_path,
     background_month_path,
+    background_hourly_month_path,
     lat_weights_path,
     assert_grid_files_consistent,
 )
@@ -101,9 +102,14 @@ def parse_train_script(path):
         if depth > 10:
             return value
         out = re.sub(
+            r"\$\{(\w+):-([^}]*)\}",
+            lambda m: os.environ.get(m.group(1), m.group(2)),
+            value,
+        )
+        out = re.sub(
             r"\$\{(\w+)\}|\$(\w+)",
             lambda m: varmap.get(m.group(1) or m.group(2), m.group(0)),
-            value,
+            out,
         )
         return expand(out, depth + 1) if "$" in out and out != value else out
 
@@ -121,8 +127,7 @@ def parse_date(flags, key):
         err(f"--{key} not found in training script")
         return None
     try:
-        y, m, d = map(int, raw.split("-"))
-        return date(y, m, d)  # raises ValueError for e.g. Feb 31
+        return datetime.fromisoformat(raw).date()
     except ValueError:
         err(f"--{key} {raw!r} is not a valid calendar date")
         return None
@@ -277,12 +282,27 @@ def main():
 
     print("\n== Per-month target + background memmaps ==")
     ch = channels or 5
+    background_mode = flags.get("background_mode", "daily_00z")
+    if background_mode not in ("daily_00z", "hourly"):
+        err(f"--background_mode has unsupported value {background_mode!r}")
+    if background_mode == "hourly" and time_freq != "1H":
+        err("--background_mode hourly requires --time_freq 1H")
+    background_path = (
+        background_hourly_month_path
+        if background_mode == "hourly"
+        else background_month_path
+    )
+    background_frames_per_day = 24 if background_mode == "hourly" else 1
     for y, m in months:
         frames = days_in_month(y, m) * frames_per_day
         check_memmap(era5_month_path(data_path, era5_mode, freq_tag, y, m),
                      frames, ch * grid_bytes, f"target {y}-{m:02d}")
-        check_memmap(background_month_path(data_path, era5_mode, y, m),
-                     days_in_month(y, m), ch * grid_bytes, f"background {y}-{m:02d}")
+        check_memmap(
+            background_path(data_path, era5_mode, y, m),
+            days_in_month(y, m) * background_frames_per_day,
+            ch * grid_bytes,
+            f"{background_mode} background {y}-{m:02d}",
+        )
 
     print("\n== Surface observations ==")
     for var in OBS_VARS:

@@ -49,6 +49,7 @@ DEFAULT_GRID_CONFIG = {
         # Per-month files used by the sub-daily (monthly) rtma_surface path.
         "era5_month": "era5/era5_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap",
         "background_month": "era5/background_{era5_mode}_1_{year}-{month:02d}.memmap",
+        "background_hourly_month": "era5/background_hourly_{era5_mode}_1_{year}-{month:02d}.memmap",
         "lat_weights": "lat_weights/weights_lat_1.npy",
     },
     "int_x": 256,
@@ -153,6 +154,16 @@ def era5_month_path(data_path, era5_mode, freq, year, month):
 
 def background_month_path(data_path, era5_mode, year, month):
     return _data_file(data_path, "background_month", era5_mode=era5_mode, year=year, month=month)
+
+
+def background_hourly_month_path(data_path, era5_mode, year, month):
+    return _data_file(
+        data_path,
+        "background_hourly_month",
+        era5_mode=era5_mode,
+        year=year,
+        month=month,
+    )
 
 
 def lat_weights_path(aux_data_path):
