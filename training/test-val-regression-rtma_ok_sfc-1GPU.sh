@@ -49,6 +49,12 @@ output_dir="${1:?usage: $0 <output_dir>}"
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd "$rundir"
 
+if [[ -d "$output_dir" && -n "$(ls -A "$output_dir")" ]]; then
+  echo "ERROR: output directory must be empty: $output_dir" >&2
+  exit 1
+fi
+mkdir -p "$output_dir"
+
 source_output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output-2gpu-lr5e-5/"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data/"
 aux_data_root="${data_root}"
@@ -56,7 +62,7 @@ model_data_dir="${data_root}/model_data_dir"
 
 # Checkpoints are written only when validation loss improves, so the
 # numerically latest epoch_* file is also the best checkpoint from that run.
-checkpoint="$(find "$source_output_dir" -maxdepth 1 -type f -name 'epoch_*' | sort -V | tail -n 1)"
+checkpoint="${REGRESSION_CHECKPOINT:-$(find "$source_output_dir" -maxdepth 1 -type f -name 'epoch_*' | sort -V | tail -n 1)}"
 if [[ -z "$checkpoint" || ! -f "$checkpoint" ]]; then
   echo "ERROR: no epoch_* checkpoint found under $source_output_dir" >&2
   exit 1
@@ -97,5 +103,9 @@ python ../aardvark/train_module.py \
   --time_freq 1H \
   --grid_config ../aardvark/grid_config_ok.yaml
 
-echo "Done. Compare with:"
-echo "  python ../scripts/check_val_regression.py <reference_dir> ${output_dir}"
+python ../scripts/summarize_val_regression.py create \
+  "$output_dir" "${output_dir}summary.json" \
+  --commit "$(git rev-parse HEAD)" --checkpoint "$checkpoint"
+
+echo "Done. Compare compact text files with:"
+echo "  python ../scripts/summarize_val_regression.py compare <reference.json> ${output_dir}summary.json"

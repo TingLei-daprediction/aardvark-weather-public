@@ -157,6 +157,7 @@ def main():
         print("\nmissing files:")
         for line in missing:
             print(f"  - {line}")
+        failures.extend(missing)
 
     if failures:
         print("\n[FAIL] metrics that must not move have changed:")

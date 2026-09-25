@@ -23,8 +23,7 @@
 # it; its own #SBATCH lines are inert comments.
 #
 # Usage:
-#clt   sbatch test-install-val-regression.sh <base_dir>
-#clt hardwired base_dir now
+#   sbatch test-install-val-regression.sh <base_dir>
 #SBATCH -A fv3-cam
 #SBATCH -J av-ok-sfc-valreg-install
 #SBATCH -p u1-h100
@@ -41,15 +40,14 @@
 
 set -euo pipefail
 
-#clt base_dir="${1:?usage: $0 <base_dir>}"
-#clt base_dir="${base_dir%/}"
-base_dir=/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/dr-basedir
+base_dir="${1:?usage: $0 <base_dir>}"
+base_dir="${base_dir%/}"
 
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd "$rundir"
 
 single_run="./test-val-regression-rtma_ok_sfc-1GPU.sh"
-compare="../scripts/check_val_regression.py"
+compare="../scripts/summarize_val_regression.py"
 
 for f in "$single_run" "$compare"; do
   if [[ ! -f "$f" ]]; then
@@ -92,7 +90,7 @@ echo ">>> [3/3] comparison"
 echo
 
 set +e
-python "$compare" "$ref_dir" "$noise_dir"
+python "$compare" compare "$ref_dir/summary.json" "$noise_dir/summary.json"
 compare_status=$?
 set -e
 
@@ -104,7 +102,7 @@ echo "------------------------------------------------------------"
 
 noise_floor=""
 for tol in 1e-12 1e-10 1e-9 1e-8 1e-7 1e-6 1e-5 1e-4 1e-3 1e-2; do
-  if python "$compare" "$ref_dir" "$noise_dir" \
+  if python "$compare" compare "$ref_dir/summary.json" "$noise_dir/summary.json" \
        --rtol "$tol" --atol 1e-12 >/dev/null 2>&1; then
     noise_floor="$tol"
     break
@@ -128,11 +126,12 @@ if [[ "$compare_status" -ne 0 ]]; then
   echo "(the default rtol=1e-6 comparison above did NOT pass; use the value below)"
 fi
 echo
-echo "Keep ${ref_dir} as the reference. After applying the code change:"
+echo "Keep ${ref_dir}/summary.json as the reference (see regression/README.md)."
+echo "After applying the code change:"
 echo
 echo "  sbatch ${single_run} ${base_dir}/after"
-echo "  python ${compare} ${ref_dir} ${base_dir}/after --rtol <tolerance>"
+echo "  python ${compare} compare ${ref_dir}/summary.json ${base_dir}/after/summary.json --rtol <tolerance> --atol 1e-12"
 echo
 echo "Choose a tolerance comfortably above ${noise_floor} -- roughly 10x is a"
-echo "reasonable margin. Anything larger than that is a real regression, not"
-echo "numerical noise."
+echo "starting margin. Confirm the chosen tolerance with repeat runs; this is"
+echo "a compact statistical check, not an exhaustive elementwise comparison."
