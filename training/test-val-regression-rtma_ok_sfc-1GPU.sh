@@ -2,12 +2,8 @@
 # Minimal validation-path regression reference for the RTMA OK encoder.
 #
 # Warm-starts from an existing checkpoint and runs exactly ONE epoch over a
-# two-day window. Warm start is what makes the run reproducible: train_module.py
-# seeds nothing (no torch.manual_seed, no cuDNN determinism flags), so a cold
-# run randomises the model weights and two runs of identical code disagree.
-# Loading a checkpoint pins the weights, and the training DistributedSampler is
-# seeded via set_epoch(), so the only remaining run-to-run variation comes from
-# non-deterministic cuDNN backward kernels.
+# two-day window. A fixed checkpoint pins weights and --seed 42 seeds PyTorch,
+# CUDA, NumPy, and Python. GPU kernels can still vary, so calibrate repeat runs.
 #
 # One epoch rather than zero: losses_*.npy is written only inside the epoch
 # loop, so --epoch 0 would record no loss at all and leave nothing to compare.
@@ -46,8 +42,22 @@ set -euo pipefail
 output_dir="${1:?usage: $0 <output_dir>}"
 [[ "$output_dir" == */ ]] || output_dir="${output_dir}/"
 
-rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
+rundir="${REGRESSION_TRAINING_DIR:-/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/}"
 cd "$rundir"
+
+# Pin execution to the intended clean checkout, including when sbatch copies this script.
+if [[ -n "${REGRESSION_CODE_COMMIT:-}" ]]; then
+  expected_commit=$(git rev-parse "${REGRESSION_CODE_COMMIT}^{commit}")
+  [[ "$(git rev-parse HEAD)" == "$expected_commit" ]] || {
+    echo "ERROR: checkout does not match REGRESSION_CODE_COMMIT=$expected_commit" >&2
+    exit 1
+  }
+  git diff --quiet HEAD -- || {
+    echo "ERROR: tracked files differ from the pinned regression commit" >&2
+    exit 1
+  }
+fi
+
 
 if [[ -d "$output_dir" && -n "$(ls -A "$output_dir")" ]]; then
   echo "ERROR: output directory must be empty: $output_dir" >&2
@@ -70,6 +80,18 @@ fi
 echo "Warm-start checkpoint: $checkpoint"
 echo "Output directory:      $output_dir"
 
+# Default invocation also works with the pre-migration loader when capturing a baseline.
+background_args=()
+background_input="${BACKGROUND_INPUT:-normalized}"
+case "$background_input" in
+  normalized) ;;
+  raw) background_args=(--background_input "$background_input") ;;
+  *) echo "ERROR: BACKGROUND_INPUT must be normalized or raw" >&2; exit 1 ;;
+esac
+if [[ -n "${BACKGROUND_NORM_MANIFEST:-}" ]]; then
+  background_args+=(--background_norm_manifest "$BACKGROUND_NORM_MANIFEST")
+fi
+
 # Flags are copied verbatim from
 # new-tl-train-encoder-rtma_ok_sfc-2GPU-lr5e-5-warmstart.sh except for:
 #   --epoch 1                     one epoch, so the run is short and comparable
@@ -77,6 +99,7 @@ echo "Output directory:      $output_dir"
 #   --master_port 12451           distinct port, so this can run alongside training
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  "${background_args[@]}" \
   --weights_dir "$checkpoint" \
   --master_port 12451 \
   --decoder vit_assimilation \
@@ -92,6 +115,7 @@ python ../aardvark/train_module.py \
   --start_ind 0 \
   --end_ind 5 \
   --epoch 1 \
+  --seed 42 \
   --cmd_init_ls 2e-4 \
   --data_path "$data_root" \
   --aux_data_path "$aux_data_root" \

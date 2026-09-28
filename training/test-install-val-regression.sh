@@ -39,12 +39,28 @@
 #SBATCH -e new-aardvark-valreg-install.%j.err
 
 set -euo pipefail
+source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
+unset PYTHONPATH
 
 base_dir="${1:?usage: $0 <base_dir>}"
 base_dir="${base_dir%/}"
 
-rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
+rundir="${REGRESSION_TRAINING_DIR:-/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/}"
 cd "$rundir"
+
+# Pin execution to the intended clean checkout, including when sbatch copies this script.
+if [[ -n "${REGRESSION_CODE_COMMIT:-}" ]]; then
+  expected_commit=$(git rev-parse "${REGRESSION_CODE_COMMIT}^{commit}")
+  [[ "$(git rev-parse HEAD)" == "$expected_commit" ]] || {
+    echo "ERROR: checkout does not match REGRESSION_CODE_COMMIT=$expected_commit" >&2
+    exit 1
+  }
+  git diff --quiet HEAD -- || {
+    echo "ERROR: tracked files differ from the pinned regression commit" >&2
+    exit 1
+  }
+fi
+
 
 single_run="./test-val-regression-rtma_ok_sfc-1GPU.sh"
 compare="../scripts/summarize_val_regression.py"
@@ -113,11 +129,8 @@ echo
 if [[ -z "$noise_floor" ]]; then
   echo "RESULT: FAILED -- the two identical runs disagree even at rtol=1e-2."
   echo
-  echo "Something substantial in the training path is unseeded (dropout is the"
-  echo "usual cause; train_module.py sets no torch.manual_seed and no cuDNN"
-  echo "determinism flags). This harness cannot gate anything until that is"
-  echo "fixed. Re-read the per-file deltas printed above to see which array"
-  echo "moved, then add seeding before capturing a reference."
+  echo "The fixed seed did not bound run-to-run variation sufficiently."
+  echo "Inspect the per-file deltas and GPU determinism before accepting a baseline."
   exit 1
 fi
 
