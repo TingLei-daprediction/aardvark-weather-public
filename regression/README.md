@@ -26,6 +26,15 @@ tolerances. NaN/Inf locations in value-compared files must match exactly.
 
 ## Establish a reference
 
+For the raw-background change, use the committed A/B worktree procedure in
+[the regression handoff](../docs/regression_test_handoff.md#capture-and-calibrate-the-first-baseline).
+Run the candidate unit suite in the pinned cluster environment first, capture
+the approved baseline from commit A (`23b19c8`, old loader), then compare both
+candidate modes from commit B. Pin `REGRESSION_TRAINING_DIR` and
+`REGRESSION_CODE_COMMIT` as shown there; do not capture this baseline from the
+feature working tree. The general commands below assume the intended checkout
+has already been selected.
+
 Adapt the existing cluster/environment/data paths in the training scripts.
 Choose an immutable checkpoint and use it for every run (the default otherwise
 selects the latest checkpoint, which could change). From the repository root:

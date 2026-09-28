@@ -17,6 +17,11 @@
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 unset PYTHONPATH
 set -euo pipefail
+export BACKGROUND_INPUT="${BACKGROUND_INPUT:-normalized}"
+case "$BACKGROUND_INPUT" in
+  normalized|raw) ;;
+  *) echo "ERROR: BACKGROUND_INPUT must be normalized or raw" >&2; exit 1 ;;
+esac
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
@@ -29,6 +34,8 @@ mkdir -p "$output_dir"
 # report; set this to 1 for the full archive after the initial gate passes.
 python scripts/diagnose_hourly_background.py \
   --data_root "$data_root" \
+  --background_input "$BACKGROUND_INPUT" \
+  --aux_data_path "$data_root" \
   --start 2022-01 \
   --end 2022-12 \
   --sample_every_days 2 \
@@ -37,6 +44,8 @@ python scripts/diagnose_hourly_background.py \
 
 python scripts/diagnose_hourly_background.py \
   --data_root "$data_root" \
+  --background_input "$BACKGROUND_INPUT" \
+  --aux_data_path "$data_root" \
   --start 2023-01 \
   --end 2023-12 \
   --sample_every_days 2 \

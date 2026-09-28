@@ -78,6 +78,9 @@ checkpoint_count=${#checkpoints[@]}
   echo "ERROR: the checkpoints=(...) block is empty"
   exit 1
 }
+if (( checkpoint_count > 1 )) && [[ -n "${BACKGROUND_NORM_MANIFEST:-}" ]]; then
+  echo "Ignoring BACKGROUND_NORM_MANIFEST for multiple checkpoints; using per-checkpoint .normalization.json files."
+fi
 for ((index = 0; index < checkpoint_count; index++)); do
   checkpoint=${checkpoints[$index]}
   [[ -f "$checkpoint" ]] || {
@@ -105,6 +108,13 @@ cd "$rundir"
 
 for ((index = 0; index < checkpoint_count; index++)); do
   checkpoint=${checkpoints[$index]}
+  norm_manifest=""
+  if (( checkpoint_count == 1 )); then
+    norm_manifest="${BACKGROUND_NORM_MANIFEST:-}"
+  fi
+  if [[ -z "$norm_manifest" && -f "${checkpoint}.normalization.json" ]]; then
+    norm_manifest="${checkpoint}.normalization.json"
+  fi
   run_label=$(basename "$(dirname "$checkpoint")")
   checkpoint_label=$(basename "$checkpoint")
   run_label=${run_label//[^[:alnum:]_.-]/_}
@@ -125,6 +135,8 @@ for ((index = 0; index < checkpoint_count; index++)); do
     echo "checkpoint=$checkpoint"
     echo "inference_time=$infer_time"
     echo "background_mode=$background_mode"
+    echo "background_input=${BACKGROUND_INPUT:-normalized}"
+    echo "background_norm_manifest=$norm_manifest"
     echo "obs_norm_mode=$obs_norm_mode"
     echo "slurm_job_id=${SLURM_JOB_ID:-manual}"
     echo "data_root=$data_root"
@@ -140,6 +152,8 @@ for ((index = 0; index < checkpoint_count; index++)); do
   # sample; eval_epoch writes unnorm_preds_0.npy and unnorm_targets_0.npy.
   python ../aardvark/train_module.py \
     --output_dir "$output_dir" \
+    --background_input "${BACKGROUND_INPUT:-normalized}" \
+    --background_norm_manifest "$norm_manifest" \
     --weights_dir "$checkpoint" \
     --master_port 12360 \
     --decoder vit_assimilation \

@@ -66,6 +66,8 @@ echo "Output dir:     ${output_dir}"
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --background_input "${BACKGROUND_INPUT:-normalized}" \
+  --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   --weights_dir "$checkpoint" \
   --master_port 12360 \
   --decoder vit_assimilation \

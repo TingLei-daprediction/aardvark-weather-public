@@ -10,6 +10,11 @@
 #   RECOMPUTE_TRAINING_NORMS=0 bash scripts/run_build_urma_ok_hourly_background.sh
 
 set -euo pipefail
+export BACKGROUND_INPUT="${BACKGROUND_INPUT:-normalized}"
+case "$BACKGROUND_INPUT" in
+  normalized|raw) ;;
+  *) echo "ERROR: BACKGROUND_INPUT must be normalized or raw" >&2; exit 1 ;;
+esac
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 recompute_training_norms="${RECOMPUTE_TRAINING_NORMS:-1}"
@@ -38,9 +43,14 @@ else
 fi
 
 prep_job=${prep_submit%%;*}
-normalize_submit=$(sbatch --parsable --dependency="afterok:${prep_job}" "$normalize_script")
-normalize_job=${normalize_submit%%;*}
-diagnose_submit=$(sbatch --parsable --dependency="afterok:${normalize_job}" "$diagnose_script")
+ready_job="$prep_job"
+normalize_job="skipped (raw input)"
+if [[ "$BACKGROUND_INPUT" == normalized ]]; then
+  normalize_submit=$(sbatch --parsable --dependency="afterok:${prep_job}" "$normalize_script")
+  normalize_job=${normalize_submit%%;*}
+  ready_job="$normalize_job"
+fi
+diagnose_submit=$(sbatch --parsable --dependency="afterok:${ready_job}" "$diagnose_script")
 diagnose_job=${diagnose_submit%%;*}
 
 echo "Submitted 24-month hourly raw-background array: $prep_job"

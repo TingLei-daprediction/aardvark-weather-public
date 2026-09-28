@@ -3,6 +3,11 @@ import time as timelib
 from time import time
 
 import numpy as np
+from background_normalization import (
+    load_background_norms,
+    normalize_background_frame,
+    validate_background_input,
+)
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -17,6 +22,7 @@ from grid_config import (
     norm_std_path,
     era5_memmap_path,
     era5_month_path,
+    background_input_path,
     background_month_path,
     background_hourly_month_path,
 )
@@ -94,6 +100,7 @@ class WeatherDataset(Dataset):
         background_mode="daily_00z",
         selected_months=None,
         sample_stride=1,
+        background_input="normalized",
     ):
 
         super().__init__()
@@ -120,6 +127,9 @@ class WeatherDataset(Dataset):
             raise ValueError(
                 f"unknown obs_norm_mode={self.obs_norm_mode!r}; expected 'static' or 'monthly'"
             )
+        self.background_input = background_input
+        validate_background_input(background_input)
+        self.background_normalization = None
         self.background_mode = background_mode
         if self.background_mode not in ("daily_00z", "hourly"):
             raise ValueError(
@@ -135,6 +145,7 @@ class WeatherDataset(Dataset):
             self.time_freq
         )
         self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
+        validate_background_input(background_input, self.monthly, bool(diff))
         self.selected_months = (
             {tuple(map(int, value.split("-"))) for value in selected_months}
             if selected_months
@@ -323,9 +334,9 @@ class WeatherDataset(Dataset):
         xx, yy = torch.meshgrid(self.era5_x[0], self.era5_x[1])
         self.era5_lonlat = torch.stack([xx, yy])
 
-        # Climatology slot. On the rtma_surface 15-min path this slot is fed a NORMALIZED daily
-        # 00z BACKGROUND/prior (date-specific, NOT a multi-year climatology) from per-month files;
-        # otherwise it is the conventional multi-year day-of-year climatology.
+        # RTMA monthly backgrounds occupy the climatology slot. Raw inputs are normalized
+        # per selected frame in get_index; normalized files are passed through unchanged.
+        # Other paths retain the conventional multi-year day-of-year climatology.
         if self.monthly:
             self.background = self._load_background_monthly()
             self.climatology_channels = self._background_channels
@@ -761,14 +772,14 @@ class WeatherDataset(Dataset):
         return era5
 
     def _background_month_path(self, year, month):
-        # Daily and hourly products have distinct names so neither can be opened with the
-        # other's shape accidentally. The daily path remains the backward-compatible default.
-        path_helper = (
-            background_hourly_month_path
-            if self.background_mode == "hourly"
-            else background_month_path
+        return background_input_path(
+            self.data_path,
+            self.era5_mode,
+            year,
+            month,
+            self.background_mode,
+            self.background_input,
         )
-        return path_helper(self.data_path, self.era5_mode, year, month)
 
     def _load_background_monthly(self):
         """Open per-month BACKGROUND memmaps keyed by (year, month).
@@ -776,10 +787,8 @@ class WeatherDataset(Dataset):
         This populates the encoder's "climatology" input slot on the monthly rtma_surface path,
         but it is a date-specific background/prior -- NOT a multi-year climatology.
         Daily mode stores one 00z frame per day; hourly mode stores 24 valid-time-matched frames
-        per day. The field is
-        expected to be **already normalized at build time with the TARGET mean/std** (loader
-        feeds it as-is, like the climatology slot today). File size, channel count, and spatial
-        shape are hard-asserted before training.
+        per day. Normalized input is passed through; raw input is normalized per selected
+        frame with target mean/std. File size, channel count, and spatial shape are checked.
         """
         background = {}
         target_channels = getattr(self, "era5_channels", None)
@@ -787,6 +796,10 @@ class WeatherDataset(Dataset):
         channels = None
         for year, month in self._month_keys():
             path = self._background_month_path(year, month)
+            if not os.path.isfile(path):
+                raise FileNotFoundError(
+                    f"background_input={self.background_input}, background_mode={self.background_mode}: missing {path}"
+                )
             nbytes = os.path.getsize(path)
             days = days_in_month(year, month)
             frames_expected = days * (24 if self.background_mode == "hourly" else 1)
@@ -816,6 +829,18 @@ class WeatherDataset(Dataset):
                 shape=(frames_expected, channels, self.nlon, self.nlat),
             )
         self._background_channels = channels
+        if not self.diff:
+            (
+                self.background_means,
+                self.background_stds,
+                self.background_normalization,
+            ) = load_background_norms(
+                self.aux_data_path,
+                self.era5_mode,
+                channels,
+                self.background_input,
+                self.background_mode,
+            )
         return background
 
     def _load_obs_monthly(self, var, mode):
@@ -1132,6 +1157,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
         background_mode="daily_00z",
         selected_months=None,
         sample_stride=1,
+        background_input="normalized",
     ):
 
         super().__init__(
@@ -1150,6 +1176,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             obs_set=obs_set,
             obs_norm_mode=obs_norm_mode,
             background_mode=background_mode,
+            background_input=background_input,
             selected_months=selected_months,
             sample_stride=sample_stride,
         )
@@ -1360,6 +1387,10 @@ class WeatherDatasetAssimilation(WeatherDataset):
             if self.background_mode == "hourly":
                 background_index = frame_in_month
             climatology = self.background[month_key][background_index, ...]
+            if self.background_input == "raw":
+                climatology = normalize_background_frame(
+                    climatology, self.background_means, self.background_stds
+                )
         elif self.time_freq == "6H":
             climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
         else:

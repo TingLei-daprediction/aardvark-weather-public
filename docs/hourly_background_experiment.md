@@ -7,6 +7,13 @@ day's 00 UTC first guess. The model architecture and 24-channel input layout are
 
 ## Modes and files
 
+The paths below describe the default `--background_input normalized` mode.
+Optional `--background_input raw` reads `background_raw_*` or
+`background_raw_hourly_*` and normalizes selected frames in the loader with the
+same target factors. Set `BACKGROUND_INPUT=raw` in the build/training wrappers
+to skip offline normalization. See [background_input.md](background_input.md)
+for checkpoint compatibility, diagnostics, and the regression merge gate.
+
 `--background_mode daily_00z` is the backward-compatible default and reads
 `urma/background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap` with one frame per day.
 

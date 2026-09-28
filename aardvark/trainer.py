@@ -1,6 +1,8 @@
 import os
 import sys
 import subprocess
+import json
+from background_normalization import check_checkpoint_normalization, compare_manifests
 
 import numpy as np
 import torch
@@ -35,6 +37,7 @@ class DDPTrainer:
         weights_path=None,
         resume_training=False,
         tune_film=False,
+        background_norm_manifest=None,
     ):
         self.rank = rank
         self.model = model
@@ -48,7 +51,27 @@ class DDPTrainer:
         self.test_loader = test_loader
         self.resume_training = resume_training
 
+        self.background_normalization = getattr(
+            train_loader.dataset, "background_normalization", None
+        )
+        self.background_norm_manifest = background_norm_manifest
+        val_normalization = getattr(
+            val_loader.dataset, "background_normalization", None
+        )
+        if self.background_normalization is not None:
+            if val_normalization is None:
+                raise ValueError(
+                    "validation dataset is missing background normalization metadata"
+                )
+            compare_manifests(self.background_normalization, val_normalization)
         checkpoint = self._load_weights_if_provided(weights_path)
+        if self.rank == 0 and self.background_normalization is not None:
+            manifest_path = os.path.join(save_path, "background_normalization.json")
+            if os.path.exists(manifest_path):
+                with open(manifest_path, encoding="utf-8") as stream:
+                    compare_manifests(json.load(stream), self.background_normalization)
+            with open(manifest_path, "w", encoding="utf-8") as stream:
+                json.dump(self.background_normalization, stream, indent=2)
         if self.resume_training and checkpoint is None:
             raise ValueError("resume_training requires a readable checkpoint file")
         self.model = self.model.to(rank)
@@ -77,14 +100,32 @@ class DDPTrainer:
         if not weights_path:
             return None
         if not os.path.exists(weights_path):
+            if (
+                self.background_normalization is not None
+                and self.background_normalization["background_input"] == "raw"
+            ):
+                raise FileNotFoundError(weights_path)
             print(f"Warning: weights path not found, skipping load: {weights_path}")
             return None
         if os.path.isdir(weights_path):
+            if (
+                self.background_normalization is not None
+                and self.background_normalization["background_input"] == "raw"
+            ):
+                raise ValueError(
+                    "weights_dir must name a checkpoint file, not a directory"
+                )
             print(
                 f"Warning: weights path is a directory, skipping load: {weights_path}"
             )
             return None
         checkpoint = torch.load(weights_path, map_location="cpu")
+        check_checkpoint_normalization(
+            checkpoint,
+            self.background_normalization,
+            weights_path,
+            self.background_norm_manifest,
+        )
         if isinstance(checkpoint, dict):
             state_dict = (
                 checkpoint.get("model_state_dict")
@@ -154,6 +195,8 @@ class DDPTrainer:
             "loss": loss,
             "best_loss": self.best_loss,
         }
+        if self.background_normalization is not None:
+            state["background_normalization"] = self.background_normalization
         if hasattr(self, "scheduler"):
             state["scheduler_state_dict"] = self.scheduler.state_dict()
         return state
@@ -433,27 +476,10 @@ class DDPTrainer:
                 self.best_loss = epoch_loss
 
                 if self.rank == 0:
-                    if self.model.module.decoder == "vit":
-                        torch.save(
-                            {
-                                "epoch": epoch,
-                                "model_state_dict": self.model.state_dict(),
-                                "optimizer_state_dict": self.opt.state_dict(),
-                                "scheduler_state_dict": self.scheduler.state_dict(),
-                                "loss": epoch_loss,
-                            },
-                            self.save_path + "epoch_{}".format(epoch),
-                        )
-                    else:
-                        torch.save(
-                            {
-                                "epoch": epoch,
-                                "model_state_dict": self.model.state_dict(),
-                                "optimizer_state_dict": self.opt.state_dict(),
-                                "loss": epoch_loss,
-                            },
-                            self.save_path + "epoch_{}".format(epoch),
-                        )
+                    torch.save(
+                        self._checkpoint_state(epoch, epoch_loss),
+                        self.save_path + "epoch_{}".format(epoch),
+                    )
                 try:
                     np.save(
                         self.save_path + "preds_train.npy".format(epoch),

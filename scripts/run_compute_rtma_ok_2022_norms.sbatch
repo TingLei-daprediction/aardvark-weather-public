@@ -18,6 +18,11 @@
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 unset PYTHONPATH
 set -euo pipefail
+export BACKGROUND_INPUT="${BACKGROUND_INPUT:-normalized}"
+case "$BACKGROUND_INPUT" in
+  normalized|raw) ;;
+  *) echo "ERROR: BACKGROUND_INPUT must be normalized or raw" >&2; exit 1 ;;
+esac
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data"
@@ -45,13 +50,17 @@ python scripts/compute_ok_obs_scalar_norms.py \
   --months_file "$months_file" \
   --freq_tag 1h
 
-python scripts/normalize_background.py \
-  --data_dir "$data_root" \
-  --era5_mode rtma_ok_sfc \
-  --subdir urma \
-  --background_mode daily_00z \
-  --years 2022 2023
+if [[ "$BACKGROUND_INPUT" == normalized ]]; then
+  python scripts/normalize_background.py \
+    --grid_config "aardvark/grid_config_ok_reduced_grid_B.yaml" \
+    --data_dir "$data_root" \
+    --aux_data_path "$data_root" \
+    --era5_mode rtma_ok_sfc \
+    --subdir urma \
+    --background_mode daily_00z \
+    --years 2022 2023
+fi
 
 echo "2022-only target and static-observation norms are ready."
-echo "Daily backgrounds were re-normalized with the 2022 target factors."
+echo "Background input: $BACKGROUND_INPUT (normalized files regenerated only in normalized mode)."
 echo "The hourly preparation job will use the same factors."

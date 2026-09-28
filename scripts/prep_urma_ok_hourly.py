@@ -19,14 +19,14 @@ Outputs (the loader's per-month contract for time_freq=1H, see docs/plan_rtma_15
 
   <output_dir>/era5/background_raw_rtma_ok_sfc_1_<YYYY>-<MM>.memmap
       (days_in_month, 5, nlon, nlat) float32, RAW values -- one 00z frame per day.
-      NOT read by the loader directly: run scripts/normalize_background.py afterwards to
-      produce background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap (normalized with target mean/std).
+      Read directly with --background_input raw. For the default normalized input,
+      run scripts/normalize_background.py to produce background_rtma_ok_sfc_1_<YYYY>-<MM>.memmap.
       The background name carries NO freq tag: one 00z frame/day is cadence-independent.
 
   <output_dir>/era5/background_raw_hourly_rtma_ok_sfc_1_<YYYY>-<MM>.memmap
       (days_in_month * 24, 5, nlon, nlat) float32, RAW hour-matched first guesses.
-      This is written only with ``--background_mode hourly`` and normalized separately to
-      ``background_hourly_rtma_ok_sfc_1_<YYYY>-<MM>.memmap``.
+      Written with --background_mode hourly. Read directly with --background_input raw,
+      or normalize offline to background_hourly_rtma_ok_sfc_1_<YYYY>-<MM>.memmap.
 
   <output_dir>/norm_factors/mean_rtma_ok_sfc_1.npy, std_rtma_ok_sfc_1.npy   (--write_norms)
       Per-channel mean/std over all processed TARGET frames. Only pass --write_norms when
@@ -546,7 +546,7 @@ def main():
             print(f"     {name:4s} mean={m:.6g} std={s:.6g}")
 
     print(
-        "\nNext: python scripts/normalize_background.py --data_dir",
+        "\nFor --background_input raw, use the raw files directly.\nFor normalized input: python scripts/normalize_background.py --data_dir",
         args.output_dir,
         "--era5_mode",
         ERA5_MODE,

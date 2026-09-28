@@ -46,12 +46,13 @@ from grid_config import (  # noqa: E402
     norm_mean_path,
     norm_std_path,
     era5_month_path,
-    background_month_path,
-    background_hourly_month_path,
+    background_input_path,
     lat_weights_path,
     assert_grid_files_consistent,
 )
 from loader_utils_new import parse_time_freq, days_in_month  # noqa: E402
+
+from background_normalization import load_background_norms, validate_background_input
 
 OBS_VARS = ["tas", "sh", "psl", "u", "v"]
 
@@ -304,11 +305,19 @@ def main():
         err(f"--background_mode has unsupported value {background_mode!r}")
     if background_mode == "hourly" and time_freq != "1H":
         err("--background_mode hourly requires --time_freq 1H")
-    background_path = (
-        background_hourly_month_path
-        if background_mode == "hourly"
-        else background_month_path
-    )
+    background_input = flags.get("background_input", "normalized")
+    try:
+        validate_background_input(
+            background_input,
+            flags.get("obs_set") == "rtma_surface" and time_freq in ("1H", "15min"),
+            flags.get("diff", "0") != "0",
+        )
+        load_background_norms(
+            aux_path, era5_mode, ch, background_input, background_mode
+        )
+    except (ValueError, OSError) as exc:
+        err(str(exc))
+        sys.exit(1)
     background_frames_per_day = 24 if background_mode == "hourly" else 1
     for y, m in months:
         frames = days_in_month(y, m) * frames_per_day
@@ -319,7 +328,9 @@ def main():
             f"target {y}-{m:02d}",
         )
         check_memmap(
-            background_path(data_path, era5_mode, y, m),
+            background_input_path(
+                data_path, era5_mode, y, m, background_mode, background_input
+            ),
             days_in_month(y, m) * background_frames_per_day,
             ch * grid_bytes,
             f"{background_mode} background {y}-{m:02d}",

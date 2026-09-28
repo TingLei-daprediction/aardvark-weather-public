@@ -1,12 +1,12 @@
 """Evaluate hour-matched RTMA-OK backgrounds before starting model training.
 
-This CPU-only, streaming diagnostic compares the normalized hourly-background memmaps with the
-raw hourly analysis targets. It reports, for every UTC hour and channel:
+This CPU-only diagnostic compares the selected raw or normalized hourly-background memmaps
+with the raw hourly analysis targets. It reports, for every UTC hour and channel:
 
 * GES[H] - analysis[H]: bias and RMSE (the background baseline the model must beat)
 * GES[H] - analysis[H-1]: bias and RMSE (a persistence/contamination diagnostic)
 
-Backgrounds are converted back to physical units with the target mean/std, matching the loader's
+Normalized backgrounds are converted back to physical units; raw input is used directly. This matches the loader's
 normalization contract. Full monthly files are size-checked before use and only one frame pair is
 materialized at a time.
 """
@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "aardvark"))
 
 from grid_config import (  # noqa: E402
-    background_hourly_month_path,
+    background_input_path,
     era5_month_path,
     load_grid_config,
     loader_grid_x_path,
@@ -76,6 +76,10 @@ def finalize(sum_values, sum_squares, counts):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--data_root", required=True)
+    parser.add_argument("--aux_data_path", help="Norm root; defaults to data_root")
+    parser.add_argument(
+        "--background_input", choices=["normalized", "raw"], default="normalized"
+    )
     parser.add_argument("--start", required=True, help="First complete month, YYYY-MM")
     parser.add_argument("--end", required=True, help="Last complete month, YYYY-MM")
     parser.add_argument("--era5_mode", default="rtma_ok_sfc")
@@ -128,10 +132,12 @@ def main():
     set_active_config(load_grid_config(config_path))
     nlon = np.asarray(np.load(loader_grid_x_path(str(data_root)))).size
     nlat = np.asarray(np.load(loader_grid_y_path(str(data_root)))).size
-    mean = np.asarray(np.load(norm_mean_path(str(data_root), args.era5_mode))).reshape(
-        -1
-    )
-    std = np.asarray(np.load(norm_std_path(str(data_root), args.era5_mode))).reshape(-1)
+    mean = np.asarray(
+        np.load(norm_mean_path(args.aux_data_path or str(data_root), args.era5_mode))
+    ).reshape(-1)
+    std = np.asarray(
+        np.load(norm_std_path(args.aux_data_path or str(data_root), args.era5_mode))
+    ).reshape(-1)
     if mean.shape != std.shape or not np.all(np.isfinite(mean)):
         raise ValueError(
             f"invalid target norm shapes/values: mean={mean.shape}, std={std.shape}"
@@ -161,7 +167,14 @@ def main():
             era5_month_path(str(data_root), args.era5_mode, "1h", year, month)
         )
         background_path = Path(
-            background_hourly_month_path(str(data_root), args.era5_mode, year, month)
+            background_input_path(
+                str(data_root),
+                args.era5_mode,
+                year,
+                month,
+                "hourly",
+                args.background_input,
+            )
         )
         shape = (frames,) + shape_tail
         require_size(target_path, shape, "analysis")
@@ -175,9 +188,11 @@ def main():
                 frame = (day - 1) * 24 + hour
                 analysis = np.asarray(target[frame], dtype=np.float32)
                 normalized_background = np.asarray(background[frame], dtype=np.float32)
-                physical_background = (
-                    normalized_background * std[:, None, None] + mean[:, None, None]
-                )
+                physical_background = normalized_background
+                if args.background_input == "normalized":
+                    physical_background = (
+                        normalized_background * std[:, None, None] + mean[:, None, None]
+                    )
                 update(
                     current_sum,
                     current_sumsq,

@@ -50,6 +50,8 @@ DEFAULT_GRID_CONFIG = {
         "era5_month": "era5/era5_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap",
         "background_month": "era5/background_{era5_mode}_1_{year}-{month:02d}.memmap",
         "background_hourly_month": "era5/background_hourly_{era5_mode}_1_{year}-{month:02d}.memmap",
+        "background_raw_month": "era5/background_raw_{era5_mode}_1_{year}-{month:02d}.memmap",
+        "background_raw_hourly_month": "era5/background_raw_hourly_{era5_mode}_1_{year}-{month:02d}.memmap",
         "lat_weights": "lat_weights/weights_lat_1.npy",
     },
     "int_x": 256,
@@ -170,6 +172,28 @@ def background_hourly_month_path(data_path, era5_mode, year, month):
         era5_mode=era5_mode,
         year=year,
         month=month,
+    )
+
+
+def background_input_path(
+    data_path,
+    era5_mode,
+    year,
+    month,
+    background_mode="daily_00z",
+    background_input="normalized",
+):
+    if background_mode not in ("daily_00z", "hourly"):
+        raise ValueError("background_mode must be daily_00z or hourly")
+    if background_input not in ("normalized", "raw"):
+        raise ValueError("background_input must be normalized or raw")
+    key = "background"
+    if background_input == "raw":
+        key += "_raw"
+    if background_mode == "hourly":
+        key += "_hourly"
+    return _data_file(
+        data_path, key + "_month", era5_mode=era5_mode, year=year, month=month
     )
 
 

@@ -1,8 +1,9 @@
 """
 Build-time normalization of per-month daily-00z or hourly RTMA-OK BACKGROUND files.
 
-The encoder's "climatology" input slot is fed unnormalized by the loader, so the background must
-be normalized at BUILD time. It is normalized with the SAME target mean/std as the rtma_ok_sfc
+For --background_input normalized (the default), prepare normalized files here.
+For --background_input raw, skip this step; the loader normalizes selected frames.
+It is normalized with the SAME target mean/std as the rtma_ok_sfc
 target fields -- NOT the HadISD observation normalization.
 
   normalized = (raw_background - target_mean) / target_std        (per channel)
@@ -30,9 +31,14 @@ Example:
 
 import argparse
 import calendar
+import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "aardvark"))
+from grid_config import load_grid_config, set_active_config
+from background_normalization import load_background_norms
 
 
 def days_in_month(year, month):
@@ -57,6 +63,11 @@ def parse_args():
         "--data_dir", required=True, help="Base data_path (has era5/ and norm_factors/)"
     )
     p.add_argument("--era5_mode", default="rtma_ok_sfc")
+    p.add_argument("--aux_data_path", help="Norm root; defaults to data_dir")
+    p.add_argument(
+        "--grid_config",
+        help="Norm-path templates; omit or use default for built-in paths",
+    )
     p.add_argument(
         "--years", nargs="*", type=int, default=[], help="Years (all 12 months each)"
     )
@@ -116,13 +127,18 @@ def main():
     era5_dir = base / args.subdir
     nf = base / "norm_factors"
 
-    mean = np.load(nf / f"mean_{args.era5_mode}_1.npy").astype(np.float32).reshape(-1)
-    std = np.load(nf / f"std_{args.era5_mode}_1.npy").astype(np.float32).reshape(-1)
-    C = mean.shape[0]
-    if std.shape[0] != C:
-        raise ValueError(f"mean/std channel mismatch: {C} vs {std.shape[0]}")
-    if np.any(std == 0):
-        raise ValueError("std has zero entries; cannot normalize the background")
+    set_active_config(
+        load_grid_config(
+            None if args.grid_config in (None, "default") else args.grid_config
+        )
+    )
+    mean, std, _ = load_background_norms(
+        args.aux_data_path or args.data_dir,
+        args.era5_mode,
+        background_mode=args.background_mode,
+    )
+    mean, std = mean[:, 0, 0], std[:, 0, 0]
+    C = mean.size
 
     months = parse_months(args.years, args.months)
     if not months:
@@ -183,6 +199,7 @@ def main():
         print(f"wrote {out_path}  (frames={frames}, C={C}, spatial={spatial})")
 
     if bg_count:
+        nf.mkdir(parents=True, exist_ok=True)
         bg_mean = bg_sum / bg_count
         bg_std = (
             np.sqrt(np.clip(bg_sumsq / bg_count - np.square(bg_mean), 0, None)) + 1e-8

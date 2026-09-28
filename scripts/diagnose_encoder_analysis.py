@@ -43,7 +43,7 @@ if str(AARDVARK_DIR) not in sys.path:
     sys.path.insert(0, str(AARDVARK_DIR))
 
 from grid_config import (  # noqa: E402
-    background_month_path,
+    background_input_path,
     era5_month_path,
     load_grid_config,
     loader_grid_x_path,
@@ -218,17 +218,20 @@ def load_background(
     channel: int,
     mean: np.ndarray,
     std: np.ndarray,
+    background_input="normalized",
+    raw_path=None,
 ) -> Tuple[np.ndarray, Optional[Path]]:
-    """Read normalized 00 UTC background and return one physical-unit lat/lon field."""
+    """Read the selected background frame and return a physical-unit lat/lon field."""
     require_memmap_size(path, shape, "monthly background")
     data = np.memmap(path, dtype="float32", mode="r", shape=shape)
     normalized = np.asarray(data[day_index, channel, :, :])
+    if background_input == "raw":
+        return normalized.T.copy(), path
     physical = (normalized * std[channel] + mean[channel]).T.copy()
 
     # normalize_background.py normally leaves this sibling in place.  When available it is
     # an independent value/orientation witness for the denormalization above.
-    raw_path = path.with_name(path.name.replace("background_", "background_raw_", 1))
-    if raw_path.is_file():
+    if raw_path is not None and raw_path.is_file():
         require_memmap_size(raw_path, shape, "raw monthly background")
         raw = np.memmap(raw_path, dtype="float32", mode="r", shape=shape)
         raw_field = np.asarray(raw[day_index, channel, :, :]).T
@@ -661,6 +664,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run_dir", required=True, help="Directory with unnorm inference arrays"
     )
+    parser.add_argument(
+        "--background_input", choices=["normalized", "raw"], default="normalized"
+    )
+    parser.add_argument(
+        "--background_mode", choices=["daily_00z", "hourly"], default="daily_00z"
+    )
+    parser.add_argument("--aux_data_path", help="Norm root; defaults to data_root")
     parser.add_argument("--analysis_time", required=True, type=parse_analysis_time)
     parser.add_argument("--data_root", required=True, help="RTMA-OK data root")
     parser.add_argument(
@@ -690,6 +700,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.background_mode == "hourly" and args.time_freq != "1H":
+        raise ValueError("hourly background requires time_freq=1H")
     if args.obs_radius_km < 0.0:
         raise ValueError("--obs_radius_km must be nonnegative")
 
@@ -737,8 +749,10 @@ def main() -> None:
             f"saved arrays have shape {pred.shape}; expected {expected_saved_shape} from grid files"
         )
 
-    mean_path = Path(norm_mean_path(str(data_root), args.era5_mode))
-    std_path = Path(norm_std_path(str(data_root), args.era5_mode))
+    mean_path = Path(
+        norm_mean_path(args.aux_data_path or str(data_root), args.era5_mode)
+    )
+    std_path = Path(norm_std_path(args.aux_data_path or str(data_root), args.era5_mode))
     mean = np.asarray(np.load(mean_path)).reshape(-1)
     std = np.asarray(np.load(std_path)).reshape(-1)
     if mean.shape != (len(CHANNELS),) or std.shape != (len(CHANNELS),):
@@ -778,15 +792,36 @@ def main() -> None:
             "check timestamp, sample, channel, and grid configuration"
         )
 
-    bg_path = Path(background_month_path(str(data_root), args.era5_mode, year, month))
-    background_shape = (days, len(CHANNELS), nlon, nlat)
+    bg_path = Path(
+        background_input_path(
+            str(data_root),
+            args.era5_mode,
+            year,
+            month,
+            args.background_mode,
+            args.background_input,
+        )
+    )
+    raw_path = Path(
+        background_input_path(
+            str(data_root), args.era5_mode, year, month, args.background_mode, "raw"
+        )
+    )
+    background_shape = (
+        days * (24 if args.background_mode == "hourly" else 1),
+        len(CHANNELS),
+        nlon,
+        nlat,
+    )
     background, raw_background_path = load_background(
         bg_path,
         background_shape,
-        args.analysis_time.day - 1,
+        frame if args.background_mode == "hourly" else args.analysis_time.day - 1,
         args.channel,
         mean,
         std,
+        args.background_input,
+        raw_path,
     )
 
     obs_lon, obs_lat, obs_values, obs_path = load_observations(

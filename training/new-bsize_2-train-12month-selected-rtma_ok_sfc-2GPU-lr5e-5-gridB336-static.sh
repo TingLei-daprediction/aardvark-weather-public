@@ -43,6 +43,9 @@ case "$background_mode" in
 esac
 
 output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output-train2022-val2023-${background_mode}-static-gridB336-bsize2/"
+if [[ "${BACKGROUND_INPUT:-normalized}" == raw ]]; then
+  output_dir="${output_dir%/}-raw/"
+fi
 data_root="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-rtma-data/dr-av-rtma_ok_data/"
 aux_data_root="${data_root}"
 model_data_dir="${data_root}/model_data_dir"
@@ -89,6 +92,8 @@ fi
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --background_input "${BACKGROUND_INPUT:-normalized}" \
+  --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   "${resume_args[@]}" \
   --master_port 12362 \
   --decoder vit_assimilation \

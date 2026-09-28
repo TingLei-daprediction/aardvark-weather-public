@@ -35,6 +35,9 @@ model_data_dir="${data_root}/model_data_dir"
 train_months_file="${rundir}/rtma_ok_train_months_2022.txt"
 val_months_file="${rundir}/rtma_ok_val_months_2023.txt"
 output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output-train2022-val2023-hourly-static-gridB336-bsize2/"
+if [[ "${BACKGROUND_INPUT:-normalized}" == raw ]]; then
+  output_dir="${output_dir%/}-raw/"
+fi
 resume_checkpoint="${RESUME_CHECKPOINT:-}"
 background_mode="hourly"
 
@@ -75,6 +78,8 @@ python ../scripts/check_ok_run_files.py --train_script "$script_path"
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --background_input "${BACKGROUND_INPUT:-normalized}" \
+  --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   "${resume_args[@]}" \
   --master_port 12363 \
   --decoder vit_assimilation \

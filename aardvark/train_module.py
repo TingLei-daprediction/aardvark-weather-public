@@ -144,6 +144,8 @@ def main(rank, world_size, output_dir, args):
         raise ValueError(
             "--obs_set rtma_surface currently supports only --two_frames 0"
         )
+    if args.background_input == "raw" and args.mode != "assimilation":
+        raise ValueError("raw background input is supported only for assimilation")
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
     if args.seed is not None:
@@ -212,6 +214,7 @@ def main(rank, world_size, output_dir, args):
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
             background_mode=args.background_mode,
+            background_input=args.background_input,
             selected_months=args.assim_train_months_resolved,
             sample_stride=1,
         )
@@ -233,6 +236,7 @@ def main(rank, world_size, output_dir, args):
             obs_set=args.obs_set,
             obs_norm_mode=args.obs_norm_mode,
             background_mode=args.background_mode,
+            background_input=args.background_input,
             selected_months=args.assim_val_months_resolved,
             sample_stride=args.assim_val_stride,
         )
@@ -471,6 +475,7 @@ def main(rank, world_size, output_dir, args):
         weights_path=weights_dir,
         resume_training=bool(args.resume_training),
         tune_film=args.film,
+        background_norm_manifest=args.background_norm_manifest,
     )
 
     # Train model
@@ -484,6 +489,13 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir")
     parser.add_argument("--mode")
     parser.add_argument("--weights_dir")
+    parser.add_argument(
+        "--background_input", choices=["normalized", "raw"], default="normalized"
+    )
+    parser.add_argument(
+        "--background_norm_manifest",
+        help="Reviewed legacy checkpoint normalization JSON with checkpoint_sha256",
+    )
     parser.add_argument(
         "--resume_training",
         type=int,

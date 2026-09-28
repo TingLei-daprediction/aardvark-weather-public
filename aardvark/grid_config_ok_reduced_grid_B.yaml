@@ -74,6 +74,8 @@ data_files:
   era5_memmap: "urma/urma_{era5_mode}_1_{freq}_{year}.memmap"
   # Per-month files (sub-daily rtma_surface path):
   era5_month: "urma/urma_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap"
+  background_raw_month: "urma/background_raw_{era5_mode}_1_{year}-{month:02d}.memmap"
+  background_raw_hourly_month: "urma/background_raw_hourly_{era5_mode}_1_{year}-{month:02d}.memmap"
   background_month: "urma/background_{era5_mode}_1_{year}-{month:02d}.memmap"
   background_hourly_month: "urma/background_hourly_{era5_mode}_1_{year}-{month:02d}.memmap"
   lat_weights: "lat_weights/weights_lat_ok.npy"

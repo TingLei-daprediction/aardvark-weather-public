@@ -23,6 +23,11 @@
 
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 set -euo pipefail
+export BACKGROUND_INPUT="${BACKGROUND_INPUT:-normalized}"
+case "$BACKGROUND_INPUT" in
+  normalized|raw) ;;
+  *) echo "ERROR: BACKGROUND_INPUT must be normalized or raw" >&2; exit 1 ;;
+esac
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 # URMA grib archive: <input_dir>/<YYYYMMDD>/urma2p5.t<HH>z.2dvar{anl,ges}_OK.grb2  -- EDIT ME
@@ -65,11 +70,15 @@ python scripts/prep_urma_ok_hourly.py \
   --write_norms
 
 # 2. Normalize the 00z background with the target mean/std written in step 1.
-python scripts/normalize_background.py \
-  --data_dir "$data_dir" \
-  --era5_mode rtma_ok_sfc \
-  --subdir "$name_root" \
-  --months $months
+if [[ "$BACKGROUND_INPUT" == normalized ]]; then
+  python scripts/normalize_background.py \
+    --grid_config "aardvark/grid_config_ok.yaml" \
+    --data_dir "$data_dir" \
+    --aux_data_path "$data_dir" \
+    --era5_mode rtma_ok_sfc \
+    --subdir "$name_root" \
+    --months $months
+fi
 
 echo "Done. Before TRAINING (not part of preprocessing):"
 echo "  - copy $data_dir/$name_root/${name_root}_x_ok.npy + ${name_root}_y_ok.npy to <model_data_path>/grid_lon_lat/"
