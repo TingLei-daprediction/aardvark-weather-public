@@ -128,10 +128,14 @@ def main():
     set_active_config(load_grid_config(config_path))
     nlon = np.asarray(np.load(loader_grid_x_path(str(data_root)))).size
     nlat = np.asarray(np.load(loader_grid_y_path(str(data_root)))).size
-    mean = np.asarray(np.load(norm_mean_path(str(data_root), args.era5_mode))).reshape(-1)
+    mean = np.asarray(np.load(norm_mean_path(str(data_root), args.era5_mode))).reshape(
+        -1
+    )
     std = np.asarray(np.load(norm_std_path(str(data_root), args.era5_mode))).reshape(-1)
     if mean.shape != std.shape or not np.all(np.isfinite(mean)):
-        raise ValueError(f"invalid target norm shapes/values: mean={mean.shape}, std={std.shape}")
+        raise ValueError(
+            f"invalid target norm shapes/values: mean={mean.shape}, std={std.shape}"
+        )
     if not np.all(np.isfinite(std)) or np.any(std <= 0):
         raise ValueError("target standard deviations must be finite and positive")
 
@@ -195,13 +199,19 @@ def main():
 
     if np.any(current_count == 0):
         missing = np.argwhere(current_count == 0)
-        raise ValueError(f"diagnostic has empty current-analysis channel-hour bins: {missing}")
+        raise ValueError(
+            f"diagnostic has empty current-analysis channel-hour bins: {missing}"
+        )
     if np.any(previous_count == 0):
         missing = np.argwhere(previous_count == 0)
-        raise ValueError(f"diagnostic has empty previous-analysis channel-hour bins: {missing}")
+        raise ValueError(
+            f"diagnostic has empty previous-analysis channel-hour bins: {missing}"
+        )
 
     current_bias, current_rmse = finalize(current_sum, current_sumsq, current_count)
-    previous_bias, previous_rmse = finalize(previous_sum, previous_sumsq, previous_count)
+    previous_bias, previous_rmse = finalize(
+        previous_sum, previous_sumsq, previous_count
+    )
     normalized_rmse = current_rmse / std[None, :]
     with np.errstate(invalid="ignore", divide="ignore"):
         current_previous_ratio = current_rmse / previous_rmse
@@ -263,15 +273,16 @@ def main():
     )
     if suspicious.size:
         bins = ", ".join(
-            f"{hour:02d}Z/{channel_names[channel]}"
-            for hour, channel in suspicious
+            f"{hour:02d}Z/{channel_names[channel]}" for hour, channel in suspicious
         )
         raise SystemExit(
             "LEAKAGE GATE FAILED for channel-hour bin(s): "
             f"{bins}; thresholds: RMSE/target_std<{args.leakage_threshold:g} or "
             f"RMSE(current)/RMSE(previous)<{args.leakage_ratio_threshold:g}"
         )
-    print("Leakage gate passed: all channel-hour bins contain data and exceed both thresholds.")
+    print(
+        "Leakage gate passed: all channel-hour bins contain data and exceed both thresholds."
+    )
 
 
 if __name__ == "__main__":

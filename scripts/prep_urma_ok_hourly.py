@@ -98,8 +98,14 @@ def parse_args():
     p = argparse.ArgumentParser(
         description="URMA grib2 -> per-month hourly target + selectable background memmaps (RTMA OK)"
     )
-    p.add_argument("--input_dir", required=True, help="Root dir containing <YYYYMMDD>/ day dirs")
-    p.add_argument("--output_dir", required=True, help="Base data_path (era5/ and norm_factors/ under it)")
+    p.add_argument(
+        "--input_dir", required=True, help="Root dir containing <YYYYMMDD>/ day dirs"
+    )
+    p.add_argument(
+        "--output_dir",
+        required=True,
+        help="Base data_path (era5/ and norm_factors/ under it)",
+    )
     p.add_argument("--start", required=True, help="First month, YYYY-MM")
     p.add_argument("--end", required=True, help="Last month (inclusive), YYYY-MM")
     p.add_argument(
@@ -114,7 +120,9 @@ def parse_args():
         default=None,
         help="Dir for era5_x_<tag>.npy / era5_y_<tag>.npy (default: <output_dir>/era5)",
     )
-    p.add_argument("--grid_tag", default="ok", help="Grid file tag (<name_root>_x_<tag>.npy)")
+    p.add_argument(
+        "--grid_tag", default="ok", help="Grid file tag (<name_root>_x_<tag>.npy)"
+    )
     p.add_argument(
         "--name_root",
         default="era5",
@@ -196,7 +204,9 @@ def axes_from_grib(path):
                     f"{path}: gridType {grid_type!r} != regular_ll; the axes can only be "
                     "derived from a regular lat-lon grid"
                 )
-            if ec.codes_get(gid, "iScansNegatively") or not ec.codes_get(gid, "jScansPositively"):
+            if ec.codes_get(gid, "iScansNegatively") or not ec.codes_get(
+                gid, "jScansPositively"
+            ):
                 raise SystemExit(f"{path}: scanning mode is not WE:SN")
             ni = ec.codes_get(gid, "Ni")
             nj = ec.codes_get(gid, "Nj")
@@ -240,8 +250,12 @@ def check_grid(gid, lon, lat, path, tol=1e-4):
     lat0 = ec.codes_get(gid, "latitudeOfFirstGridPointInDegrees")
     lon1 = ec.codes_get(gid, "longitudeOfLastGridPointInDegrees") % 360
     lat1 = ec.codes_get(gid, "latitudeOfLastGridPointInDegrees")
-    if ec.codes_get(gid, "iScansNegatively") or not ec.codes_get(gid, "jScansPositively"):
-        raise SystemExit(f"{path}: scanning mode is not WE:SN; this script assumes WE:SN")
+    if ec.codes_get(gid, "iScansNegatively") or not ec.codes_get(
+        gid, "jScansPositively"
+    ):
+        raise SystemExit(
+            f"{path}: scanning mode is not WE:SN; this script assumes WE:SN"
+        )
     for got, want, name in [
         (lon0, lon[0], "lon first"),
         (lon1, lon[-1], "lon last"),
@@ -316,13 +330,17 @@ def prescan(
                     fp = ddir / anl_pattern.format(hour=hour)
                     if not fp.exists():
                         missing.append(str(fp))
-            background_hours = range(FRAMES_PER_DAY) if background_mode == "hourly" else (0,)
+            background_hours = (
+                range(FRAMES_PER_DAY) if background_mode == "hourly" else (0,)
+            )
             for hour in background_hours:
                 gp = ddir / ges_pattern.format(hour=hour)
                 if not gp.exists():
                     missing.append(str(gp))
     if missing:
-        print(f"[{'WARN' if fill_missing == 'persist' else 'ERROR'}] {len(missing)} missing files:")
+        print(
+            f"[{'WARN' if fill_missing == 'persist' else 'ERROR'}] {len(missing)} missing files:"
+        )
         for m in missing:
             print("  ", m)
         if fill_missing == "error":
@@ -379,11 +397,15 @@ def main():
     else:
         lon, lat = np.load(x_path), np.load(y_path)
         if not (np.all(np.diff(lon) > 0) and np.all(np.diff(lat) > 0)):
-            raise SystemExit("Grid axes must be ascending (build_grid_lonlat.py convention).")
+            raise SystemExit(
+                "Grid axes must be ascending (build_grid_lonlat.py convention)."
+            )
     nlon, nlat = lon.size, lat.size
     era5_dir = Path(args.output_dir) / args.name_root
     era5_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Grid: nlon={nlon} lon {lon[0]:.4f}..{lon[-1]:.4f}, nlat={nlat} lat {lat[0]:.4f}..{lat[-1]:.4f}")
+    print(
+        f"Grid: nlon={nlon} lon {lon[0]:.4f}..{lon[-1]:.4f}, nlat={nlat} lat {lat[0]:.4f}..{lat[-1]:.4f}"
+    )
 
     missing = prescan(
         args.input_dir,
@@ -402,8 +424,15 @@ def main():
 
     for year, month in months:
         days = calendar.monthrange(year, month)[1]
-        tgt_path = era5_dir / f"{args.name_root}_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
-        bg_stem = "background_raw_hourly" if args.background_mode == "hourly" else "background_raw"
+        tgt_path = (
+            era5_dir
+            / f"{args.name_root}_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
+        )
+        bg_stem = (
+            "background_raw_hourly"
+            if args.background_mode == "hourly"
+            else "background_raw"
+        )
         bg_path = era5_dir / f"{bg_stem}_{ERA5_MODE}_1_{year}-{month:02d}.memmap"
         background_frames = days * (24 if args.background_mode == "hourly" else 1)
         tgt = None
@@ -434,13 +463,13 @@ def main():
                             raise SystemExit(
                                 f"{fp}: missing with no previous frame to persist from"
                             )
-                        print(f"[FILL] {fp} missing -> persisted previous frame into row {idx}")
+                        print(
+                            f"[FILL] {fp} missing -> persisted previous frame into row {idx}"
+                        )
                         frame = prev_frame
                     else:
                         expected = f"{year:04d}{month:02d}{day:02d}{hour:02d}"
-                        frame = read_frame(
-                            fp, lon, lat, expected, args.skip_time_check
-                        )
+                        frame = read_frame(fp, lon, lat, expected, args.skip_time_check)
                     tgt[idx] = frame
                     prev_frame = frame
                     sum_c += frame.sum(axis=(1, 2), dtype=np.float64)
@@ -454,7 +483,9 @@ def main():
                             raise SystemExit(
                                 f"{gp}: missing with no previous background to persist from"
                             )
-                        print(f"[FILL] {gp} missing -> persisted previous background into row {idx}")
+                        print(
+                            f"[FILL] {gp} missing -> persisted previous background into row {idx}"
+                        )
                         background_frame = prev_background
                     else:
                         expected = f"{year:04d}{month:02d}{day:02d}{hour:02d}"
@@ -472,7 +503,9 @@ def main():
                             f"{gp}: --background_only cannot fill from an analysis; "
                             "provide a complete background archive"
                         )
-                    print(f"[FILL] {gp} missing -> persisted 00z ANALYSIS of the day as background")
+                    print(
+                        f"[FILL] {gp} missing -> persisted 00z ANALYSIS of the day as background"
+                    )
                     bg[day - 1] = tgt[(day - 1) * FRAMES_PER_DAY]
                 else:
                     bg[day - 1] = read_frame(

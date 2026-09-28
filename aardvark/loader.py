@@ -131,7 +131,9 @@ class WeatherDataset(Dataset):
         # month_frame(); the offset machinery (build_offsets) is bypassed -- alignment is
         # deterministic. All per-month files carry the cadence via freq_tag so 15-min and 1-hour
         # datasets can coexist in one data_path.
-        self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(self.time_freq)
+        self.step_minutes, self.frames_per_day, self.freq_tag = parse_time_freq(
+            self.time_freq
+        )
         self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
         self.selected_months = (
             {tuple(map(int, value.split("-"))) for value in selected_months}
@@ -284,13 +286,9 @@ class WeatherDataset(Dataset):
 
         # Internal grid to longitude latitude correspondence
         self.era5_x = [
-            self.to_tensor(
-                np.load(loader_grid_x_path(self.data_path))
-            )
+            self.to_tensor(np.load(loader_grid_x_path(self.data_path)))
             / LATLON_SCALE_FACTOR,
-            self.to_tensor(
-                np.load(loader_grid_y_path(self.data_path))
-            )
+            self.to_tensor(np.load(loader_grid_y_path(self.data_path)))
             / LATLON_SCALE_FACTOR,
         ]
         assert_grid_match(
@@ -359,12 +357,12 @@ class WeatherDataset(Dataset):
                 :, np.newaxis, np.newaxis, ...
             ]
         else:
-            self.means = np.load(
-                norm_mean_path(self.aux_data_path, self.era5_mode)
-            )[:, np.newaxis, np.newaxis, ...]
-            self.stds = np.load(
-                norm_std_path(self.aux_data_path, self.era5_mode)
-            )[:, np.newaxis, np.newaxis, ...]
+            self.means = np.load(norm_mean_path(self.aux_data_path, self.era5_mode))[
+                :, np.newaxis, np.newaxis, ...
+            ]
+            self.stds = np.load(norm_std_path(self.aux_data_path, self.era5_mode))[
+                :, np.newaxis, np.newaxis, ...
+            ]
 
     def _infer_time_dim(self, path, fixed_shape):
         file_bytes = os.path.getsize(path)
@@ -442,9 +440,7 @@ class WeatherDataset(Dataset):
         """
 
         igra_y_path = self.data_path + "igra/1999_2021_igra_y.mmap"
-        igra_y_shape = list(
-            IGRA_Y_SHAPE_1D if self.time_freq != "6H" else IGRA_Y_SHAPE
-        )
+        igra_y_shape = list(IGRA_Y_SHAPE_1D if self.time_freq != "6H" else IGRA_Y_SHAPE)
         self.igra_y = np.memmap(
             igra_y_path,
             dtype="float32",
@@ -720,7 +716,9 @@ class WeatherDataset(Dataset):
     def _era5_month_path(self, year, month):
         # Name comes from the grid-config "era5_month" template (override in the YAML to
         # rename the "era5" dir/prefix for a regional dataset).
-        return era5_month_path(self.data_path, self.era5_mode, self.freq_tag, year, month)
+        return era5_month_path(
+            self.data_path, self.era5_mode, self.freq_tag, year, month
+        )
 
     def _load_era5_monthly(self):
         """Open per-month ERA5 target memmaps keyed by (year, month).
@@ -733,7 +731,7 @@ class WeatherDataset(Dataset):
         era5 = {}
         channels = None
         per_frame = self.nlon * self.nlat * 4
-        for (year, month) in self._month_keys():
+        for year, month in self._month_keys():
             path = self._era5_month_path(year, month)
             nbytes = os.path.getsize(path)
             frames_expected = days_in_month(year, month) * self.frames_per_day
@@ -757,7 +755,9 @@ class WeatherDataset(Dataset):
                 mode="r",
                 shape=(frames_expected, channels, self.nlon, self.nlat),
             )
-        self.era5_channels = channels  # used to cross-check the 00z background channel count
+        self.era5_channels = (
+            channels  # used to cross-check the 00z background channel count
+        )
         return era5
 
     def _background_month_path(self, year, month):
@@ -785,7 +785,7 @@ class WeatherDataset(Dataset):
         target_channels = getattr(self, "era5_channels", None)
         per_frame = self.nlon * self.nlat * 4
         channels = None
-        for (year, month) in self._month_keys():
+        for year, month in self._month_keys():
             path = self._background_month_path(year, month)
             nbytes = os.path.getsize(path)
             days = days_in_month(year, month)
@@ -831,16 +831,16 @@ class WeatherDataset(Dataset):
         values = {}
         max_stations = 0
         obs_dir = os.path.join(self.data_path, "hadisd_processed")
-        for (year, month) in self._month_keys():
+        for year, month in self._month_keys():
             key = (year, month)
             tag = f"{year}-{month:02d}"
             coord_paths = {
-                component: os.path.join(
-                    obs_dir, f"{var}_{component}_{mode}-{tag}.npy"
-                )
+                component: os.path.join(obs_dir, f"{var}_{component}_{mode}-{tag}.npy")
                 for component in ("lon", "lat", "alt")
             }
-            missing = [path for path in coord_paths.values() if not os.path.isfile(path)]
+            missing = [
+                path for path in coord_paths.values() if not os.path.isfile(path)
+            ]
             if missing:
                 raise FileNotFoundError(
                     f"missing month-specific {var} coordinate file(s) for {tag}: {missing}"
@@ -860,9 +860,7 @@ class WeatherDataset(Dataset):
             )
             altitudes[key] = alt
 
-            path = os.path.join(
-                obs_dir, f"{var}_vals_{self.freq_tag}_{tag}.memmap"
-            )
+            path = os.path.join(obs_dir, f"{var}_vals_{self.freq_tag}_{tag}.memmap")
             frames_expected = days_in_month(year, month) * self.frames_per_day
             per_frame = stations * 4
             nbytes = os.path.getsize(path)
@@ -885,12 +883,8 @@ class WeatherDataset(Dataset):
         for key, coords in coordinates.items():
             year, month = key
             tag = f"{year}-{month:02d}"
-            mean_path = os.path.join(
-                norm_dir, f"mean_hadisd_{var}_{mode}-{tag}.npy"
-            )
-            std_path = os.path.join(
-                norm_dir, f"std_hadisd_{var}_{mode}-{tag}.npy"
-            )
+            mean_path = os.path.join(norm_dir, f"mean_hadisd_{var}_{mode}-{tag}.npy")
+            std_path = os.path.join(norm_dir, f"std_hadisd_{var}_{mode}-{tag}.npy")
             if not os.path.isfile(mean_path) or not os.path.isfile(std_path):
                 raise FileNotFoundError(
                     f"monthly observation norms missing for {var} {tag}: "
@@ -906,9 +900,13 @@ class WeatherDataset(Dataset):
                     "norm vectors must follow the monthly coordinate/value station order"
                 )
             if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)):
-                raise ValueError(f"non-finite monthly observation norms for {var} {tag}")
+                raise ValueError(
+                    f"non-finite monthly observation norms for {var} {tag}"
+                )
             if np.any(std <= 0):
-                raise ValueError(f"non-positive monthly observation std for {var} {tag}")
+                raise ValueError(
+                    f"non-positive monthly observation std for {var} {tag}"
+                )
             means[key] = mean
             stds[key] = std
         return means, stds
@@ -1000,9 +998,12 @@ class WeatherDataset(Dataset):
                     f"scalar norms for {var}; got mean shape {mean.shape}, std shape "
                     f"{std.shape}. Recompute norms over all training-month values."
                 )
-            if mean.shape != std.shape or not np.all(np.isfinite(mean)) or not np.all(
-                np.isfinite(std)
-            ) or np.any(std <= 0):
+            if (
+                mean.shape != std.shape
+                or not np.all(np.isfinite(mean))
+                or not np.all(np.isfinite(std))
+                or np.any(std <= 0)
+            ):
                 raise ValueError(
                     f"invalid HadISD norms for {var}: mean shape {mean.shape}, "
                     f"std shape {std.shape}; values must be finite and std positive"
@@ -1037,14 +1038,14 @@ class WeatherDataset(Dataset):
         x = self.nlon
         y = self.nlat
         freq_tag = "6" if self.time_freq == "6H" else "1d"
-        memmap_path = era5_memmap_path(
-            self.data_path, self.era5_mode, freq_tag, year
-        )
+        memmap_path = era5_memmap_path(self.data_path, self.era5_mode, freq_tag, year)
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
             denom = d * x * y * 4
             if nbytes % denom != 0:
-                raise ValueError(f"File size not divisible by expected frame size: {memmap_path}")
+                raise ValueError(
+                    f"File size not divisible by expected frame size: {memmap_path}"
+                )
             levels = nbytes // denom
         mmap = np.memmap(
             memmap_path,
@@ -1087,7 +1088,9 @@ class WeatherDataset(Dataset):
         # Interannual term: dropped (set to 0) on the RTMA monthly path -- the daily 00z
         # background already carries day-specific/interannual state, and the global 2007/15
         # baseline is not meaningful for OK. Channel count stays 5 (in_channels unchanged).
-        year = 0.0 if getattr(self, "monthly", False) else (current_date.year - 2007) / 15
+        year = (
+            0.0 if getattr(self, "monthly", False) else (current_date.year - 2007) / 15
+        )
         # Fractional hour so sub-hourly (e.g. 15-min) steps are distinguishable. Backward
         # compatible: 6H/1D timestamps have minute==0, so this equals the integer hour.
         time_of_day = current_date.hour + current_date.minute / 60
@@ -1303,9 +1306,11 @@ class WeatherDatasetAssimilation(WeatherDataset):
             # explicitly masked by convDeepSet and therefore contribute zero density/value.
             x_context_hadisd = []
             y_context_hadisd = []
-            for var_index, (coords_by_month, values_by_month, max_stations) in enumerate(
-                zip(self.hadisd_x, self.hadisd_y, self.hadisd_max_stations)
-            ):
+            for var_index, (
+                coords_by_month,
+                values_by_month,
+                max_stations,
+            ) in enumerate(zip(self.hadisd_x, self.hadisd_y, self.hadisd_max_stations)):
                 coords = np.asarray(coords_by_month[month_key])
                 values = np.asarray(values_by_month[month_key][frame_in_month, :])
                 if coords.shape != (values.size, 2):
@@ -1341,9 +1346,7 @@ class WeatherDatasetAssimilation(WeatherDataset):
             y_context_hadisd = self.norm_hadisd(y_context_hadisd)
 
         # ERA5
-        era5 = self.to_tensor(
-            self.load_era5_time(index, month_key, frame_in_month)
-        )
+        era5 = self.to_tensor(self.load_era5_time(index, month_key, frame_in_month))
         era5_target = era5.permute(2, 1, 0)
         era5_x = self.era5_x
 
@@ -1447,7 +1450,9 @@ class WeatherDatasetAssimilation(WeatherDataset):
 
             # IGRA (optional)
             if not self.disable_igra:
-                igra_y = self.to_tensor(self.igra_y[index + self.igra_index_offset, ...])
+                igra_y = self.to_tensor(
+                    self.igra_y[index + self.igra_index_offset, ...]
+                )
                 igra_x = [self.igra_x[:, 0], self.igra_x[:, 1]]
                 igra_x = [self.to_tensor(i) for i in igra_x]
                 igra_y = self.norm_data(igra_y, self.igra_means, self.igra_stds)
@@ -1634,7 +1639,12 @@ class AardvarkICDataset(Dataset):
                 self.encoder_predictions_path + ic_fname,
                 dtype="float32",
                 mode="r",
-                shape=(len(dates), self.nlat, self.nlon, channels),  # shape of the output
+                shape=(
+                    len(dates),
+                    self.nlat,
+                    self.nlon,
+                    channels,
+                ),  # shape of the output
             )
         else:
             # if leadtime >0 load the forecast generated from the encoder prediction
@@ -1799,14 +1809,14 @@ class WeatherDatasetDownscaling(Dataset):
         x = self.nlon
         y = self.nlat
         freq_tag = "6" if self.time_freq == "6H" else "1d"
-        memmap_path = era5_memmap_path(
-            self.data_path, self.era5_mode, freq_tag, year
-        )
+        memmap_path = era5_memmap_path(self.data_path, self.era5_mode, freq_tag, year)
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
             denom = d * x * y * 4
             if nbytes % denom != 0:
-                raise ValueError(f"File size not divisible by expected frame size: {memmap_path}")
+                raise ValueError(
+                    f"File size not divisible by expected frame size: {memmap_path}"
+                )
             levels = nbytes // denom
         mmap = np.memmap(
             memmap_path,
@@ -1978,12 +1988,8 @@ class ForecasterDatasetDownscaling(Dataset):
         self.dates = pd.date_range(start_date, end_date, freq=self.time_freq)[:-30]
 
         # Normalisation
-        self.means = np.load(
-            norm_mean_path(self.aux_data_path, self.era5_mode)
-        )
-        self.stds = np.load(
-            norm_std_path(self.aux_data_path, self.era5_mode)
-        )
+        self.means = np.load(norm_mean_path(self.aux_data_path, self.era5_mode))
+        self.stds = np.load(norm_std_path(self.aux_data_path, self.era5_mode))
 
         # Load auxiliary data
         self.load_npy_file()
@@ -2037,7 +2043,9 @@ class ForecasterDatasetDownscaling(Dataset):
         dates = pd.date_range(self.start_date, self.end_date, freq=self.time_freq)
 
         if self.mode == "train":
-            dates = dates[: -(10 * self.offset_factor)]  # Need 10 day offset at end of year
+            dates = dates[
+                : -(10 * self.offset_factor)
+            ]  # Need 10 day offset at end of year
 
         self.Y_context = np.memmap(
             "path_to_forecasts/forecast_{}.mmap".format(self.mode),
@@ -2058,7 +2066,9 @@ class ForecasterDatasetDownscaling(Dataset):
         return self.hadisd_data.unnorm_pred(x)
 
     def __len__(self):
-        return len(self.dates) - (10 * self.offset_factor)  # Need 10 day offset at end of year
+        return len(self.dates) - (
+            10 * self.offset_factor
+        )  # Need 10 day offset at end of year
 
     def to_tensor(self, arr):
         return torch.from_numpy(np.array(arr)).float().to(self.device)
@@ -2187,7 +2197,9 @@ class ForecastLoader(Dataset):
 
         if start_date is not None or end_date is not None:
             if not start_date or not end_date:
-                raise ValueError("Both start_date and end_date are required for ForecastLoader.")
+                raise ValueError(
+                    "Both start_date and end_date are required for ForecastLoader."
+                )
             self.dates = pd.date_range(start_date, end_date, freq=freq)
         else:
             if self.mode == "train":
@@ -2270,9 +2282,7 @@ class ForecastLoader(Dataset):
             )
 
         # Orography. Raw file is (channels, nlat, nlon).
-        self.era5_elev = np.float32(
-            np.load(elev_vars_path(self.data_path))
-        )
+        self.era5_elev = np.float32(np.load(elev_vars_path(self.data_path)))
         assert_grid_match(
             "elev_vars (raw)", self.era5_elev.shape[1:], (self.nlat, self.nlon)
         )
@@ -2293,16 +2303,12 @@ class ForecastLoader(Dataset):
 
         # Noramalisation factors
         self.means = (
-            self.to_tensor(
-                np.load(norm_mean_path(self.data_path, self.era5_mode))
-            )
+            self.to_tensor(np.load(norm_mean_path(self.data_path, self.era5_mode)))
             .unsqueeze(1)
             .unsqueeze(1)
         )
         self.stds = (
-            self.to_tensor(
-                np.load(norm_std_path(self.data_path, self.era5_mode))
-            )
+            self.to_tensor(np.load(norm_std_path(self.data_path, self.era5_mode)))
             .unsqueeze(1)
             .unsqueeze(1)
         )
@@ -2311,9 +2317,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_1.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/mean_diff_{}_1.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2323,9 +2327,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_1.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/std_diff_{}_1.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2336,9 +2338,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_1_6h.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/mean_diff_{}_1_6h.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2348,9 +2348,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_1_6h.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/std_diff_{}_1_6h.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2361,9 +2359,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/mean_diff_{}_1_12h.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/mean_diff_{}_1_12h.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2373,9 +2369,7 @@ class ForecastLoader(Dataset):
                 self.to_tensor(
                     np.load(
                         self.data_path
-                        + "norm_factors/std_diff_{}_1_12h.npy".format(
-                            self.era5_mode
-                        )
+                        + "norm_factors/std_diff_{}_1_12h.npy".format(self.era5_mode)
                     )
                 )
                 .unsqueeze(0)
@@ -2451,9 +2445,7 @@ class ForecastLoader(Dataset):
         y = self.nlat
 
         freq_tag = "6" if self.frequency == 6 else "1d"
-        memmap_path = era5_memmap_path(
-            self.data_path, self.era5_mode, freq_tag, year
-        )
+        memmap_path = era5_memmap_path(self.data_path, self.era5_mode, freq_tag, year)
         if levels is None:
             nbytes = os.path.getsize(memmap_path)
             denom = d * x * y * 4

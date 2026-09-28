@@ -53,18 +53,31 @@ def parse_args():
     p = argparse.ArgumentParser(
         description="Normalize per-month RTMA background with target mean/std (build time)."
     )
-    p.add_argument("--data_dir", required=True, help="Base data_path (has era5/ and norm_factors/)")
+    p.add_argument(
+        "--data_dir", required=True, help="Base data_path (has era5/ and norm_factors/)"
+    )
     p.add_argument("--era5_mode", default="rtma_ok_sfc")
-    p.add_argument("--years", nargs="*", type=int, default=[], help="Years (all 12 months each)")
-    p.add_argument("--months", nargs="*", default=[], help="Explicit YYYY-MM list (overrides --years)")
+    p.add_argument(
+        "--years", nargs="*", type=int, default=[], help="Years (all 12 months each)"
+    )
+    p.add_argument(
+        "--months",
+        nargs="*",
+        default=[],
+        help="Explicit YYYY-MM list (overrides --years)",
+    )
     p.add_argument(
         "--background_mode",
         default="daily_00z",
         choices=["daily_00z", "hourly"],
         help="Background cadence; hourly selects distinct *_hourly input/output names.",
     )
-    p.add_argument("--raw_name", default=None, help="Override the mode-specific raw input stem")
-    p.add_argument("--out_name", default=None, help="Override the mode-specific output stem")
+    p.add_argument(
+        "--raw_name", default=None, help="Override the mode-specific raw input stem"
+    )
+    p.add_argument(
+        "--out_name", default=None, help="Override the mode-specific output stem"
+    )
     p.add_argument(
         "--chunk_frames",
         type=int,
@@ -151,9 +164,13 @@ def main():
                 f"{raw_path}: size {nbytes} not divisible by frames*C*4={denom} "
                 f"(frames={frames}, C={C}, background_mode={args.background_mode})"
             )
-        spatial = nbytes // denom  # nlon*nlat, kept flat (per-channel norm needs no split)
+        spatial = (
+            nbytes // denom
+        )  # nlon*nlat, kept flat (per-channel norm needs no split)
         raw = np.memmap(raw_path, dtype="float32", mode="r", shape=(frames, C, spatial))
-        out = np.memmap(out_path, dtype="float32", mode="w+", shape=(frames, C, spatial))
+        out = np.memmap(
+            out_path, dtype="float32", mode="w+", shape=(frames, C, spatial)
+        )
         for start in range(0, frames, args.chunk_frames):
             end = min(start + args.chunk_frames, frames)
             raw_chunk = np.asarray(raw[start:end], dtype=np.float32)
@@ -167,12 +184,20 @@ def main():
 
     if bg_count:
         bg_mean = bg_sum / bg_count
-        bg_std = np.sqrt(np.clip(bg_sumsq / bg_count - np.square(bg_mean), 0, None)) + 1e-8
-        bg_mean_path = nf / f"mean_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
-        bg_std_path = nf / f"std_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
+        bg_std = (
+            np.sqrt(np.clip(bg_sumsq / bg_count - np.square(bg_mean), 0, None)) + 1e-8
+        )
+        bg_mean_path = (
+            nf / f"mean_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
+        )
+        bg_std_path = (
+            nf / f"std_{args.raw_name.replace('_raw', '')}_{args.era5_mode}_1.npy"
+        )
         np.save(bg_mean_path, bg_mean)
         np.save(bg_std_path, bg_std)
-        print(f"wrote {bg_mean_path} and {bg_std_path} (RAW background stats, diagnostic):")
+        print(
+            f"wrote {bg_mean_path} and {bg_std_path} (RAW background stats, diagnostic):"
+        )
         for c in range(C):
             print(
                 f"  ch{c}: bg mean={bg_mean[c]:.6g} std={bg_std[c]:.6g}  |  "

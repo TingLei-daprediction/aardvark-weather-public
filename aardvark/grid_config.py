@@ -56,7 +56,9 @@ DEFAULT_GRID_CONFIG = {
     "int_y": 128,
 }
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "grid_config.yaml")
+DEFAULT_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "grid_config.yaml"
+)
 
 _ACTIVE = None
 
@@ -124,6 +126,7 @@ def model_grid_y_path(model_data_path):
 
 # --- Other grid/domain-dependent data files (templates in cfg["data_files"]) -------------
 
+
 def _data_file(root, key, **kw):
     # os.path.join handles roots with or without a trailing separator.
     name = get_active_config()["data_files"][key].format(**kw)
@@ -143,7 +146,9 @@ def norm_std_path(root, era5_mode):
 
 
 def era5_memmap_path(data_path, era5_mode, freq, year):
-    return _data_file(data_path, "era5_memmap", era5_mode=era5_mode, freq=freq, year=year)
+    return _data_file(
+        data_path, "era5_memmap", era5_mode=era5_mode, freq=freq, year=year
+    )
 
 
 def era5_month_path(data_path, era5_mode, freq, year, month):
@@ -153,7 +158,9 @@ def era5_month_path(data_path, era5_mode, freq, year, month):
 
 
 def background_month_path(data_path, era5_mode, year, month):
-    return _data_file(data_path, "background_month", era5_mode=era5_mode, year=year, month=month)
+    return _data_file(
+        data_path, "background_month", era5_mode=era5_mode, year=year, month=month
+    )
 
 
 def background_hourly_month_path(data_path, era5_mode, year, month):

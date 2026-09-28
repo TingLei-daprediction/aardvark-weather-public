@@ -51,7 +51,6 @@ class DDPTrainer:
         checkpoint = self._load_weights_if_provided(weights_path)
         if self.resume_training and checkpoint is None:
             raise ValueError("resume_training requires a readable checkpoint file")
-
         self.model = self.model.to(rank)
         self.model = DDP(self.model, device_ids=[rank], find_unused_parameters=True)
 
@@ -63,12 +62,10 @@ class DDPTrainer:
                 weight_decay=1e-5,
             )
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.opt, 891 * 80)
-
         else:
             self.opt = torch.optim.Adam(
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
-
         self.losses = []
         self.train_losses = []
         self.maes = []
@@ -83,9 +80,10 @@ class DDPTrainer:
             print(f"Warning: weights path not found, skipping load: {weights_path}")
             return None
         if os.path.isdir(weights_path):
-            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            print(
+                f"Warning: weights path is a directory, skipping load: {weights_path}"
+            )
             return None
-
         checkpoint = torch.load(weights_path, map_location="cpu")
         if isinstance(checkpoint, dict):
             state_dict = (
@@ -95,15 +93,16 @@ class DDPTrainer:
             )
         else:
             state_dict = checkpoint
-
         if isinstance(state_dict, dict) and state_dict:
             keys = list(state_dict.keys())
             if keys and keys[0].startswith("module."):
-                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
-
+                state_dict = {
+                    k.replace("module.", "", 1): v for k, v in state_dict.items()
+                }
         # strict=True: a partially-matching checkpoint (missing keys) must fail loudly
         # rather than silently run with randomly-initialized weights -- essential for
         # eval-only/inference runs (--epoch 0), where wrong output would look plausible.
+
         self.model.load_state_dict(state_dict, strict=True)
         return checkpoint
 
@@ -123,7 +122,9 @@ class DDPTrainer:
                 raise ValueError("resume checkpoint missing scheduler_state_dict")
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.start_epoch = int(checkpoint["epoch"]) + 1
-        self.best_loss = float(checkpoint.get("best_loss", checkpoint.get("loss", 1000)))
+        self.best_loss = float(
+            checkpoint.get("best_loss", checkpoint.get("loss", 1000))
+        )
         for attribute, filename in (
             ("losses", f"losses_{self.rank}.npy"),
             ("train_losses", f"train_losses_{self.rank}.npy"),
@@ -133,6 +134,7 @@ class DDPTrainer:
                 # checkpoint_last is authoritative. A job can die after writing a history
                 # entry but before atomically replacing checkpoint_last; discard that orphan
                 # entry so history index N continues to correspond to epoch_N.
+
                 setattr(
                     self,
                     attribute,
@@ -212,7 +214,6 @@ class DDPTrainer:
                     if ic is not None:
                         unnorm_pred = unnorm_pred + ic
                         unnorm_target = unnorm_target + ic
-
                     lu = (
                         self.loss_function(
                             unnorm_target,
@@ -227,19 +228,22 @@ class DDPTrainer:
                     )
 
                     lf_unnorm.append(lu)
-
                 except Exception as exc:
                     if not getattr(self, "_warned_unnorm", False):
                         debug_info = {
                             "era5_mode": getattr(
                                 self.train_loader.dataset, "era5_mode", None
                             ),
-                            "y_target": tuple(task["y_target"].shape)
-                            if "y_target" in task
-                            else None,
-                            "y_context": tuple(task["y_context"].shape)
-                            if "y_context" in task
-                            else None,
+                            "y_target": (
+                                tuple(task["y_target"].shape)
+                                if "y_target" in task
+                                else None
+                            ),
+                            "y_context": (
+                                tuple(task["y_context"].shape)
+                                if "y_context" in task
+                                else None
+                            ),
                             "out": tuple(out.shape) if "out" in locals() else None,
                             "ic": tuple(ic.shape) if "ic" in locals() else None,
                             "means": getattr(
@@ -260,7 +264,6 @@ class DDPTrainer:
                         )
                         self._warned_unnorm = True
                     pass
-
             if self.test_loader is not None:
                 forecasts = []
                 targets = []
@@ -275,8 +278,8 @@ class DDPTrainer:
                     stations.append(
                         task["downscaling"]["x_target"].detach().cpu().numpy() * 360
                     )
-
                 # Save the test outputs
+
                 np.save(
                     self.save_path + f"forecast_{self.rank}_{self.epoch}.npy",
                     np.concatenate(forecasts, axis=0),
@@ -289,7 +292,6 @@ class DDPTrainer:
                     self.save_path + f"stations_{self.rank}_{self.epoch}.npy",
                     np.concatenate(stations, axis=0),
                 )
-
         log_loss = np.nanmean(np.array(lf))
 
         if log_loss < self.best_loss:
@@ -308,14 +310,12 @@ class DDPTrainer:
             log_loss_unnorm = np.nanmean(np.stack(lf_unnorm), axis=0)
         else:
             log_loss_unnorm = np.nan
-
         if np.logical_and(self.rank == 0, self.epoch % 5 == 0):
 
             np.save(self.save_path + "preds_eval.npy", out.cpu().numpy())
             np.save(
                 self.save_path + "y_target_eval.npy", task["y_target"].cpu().numpy()
             )
-
         return log_loss, log_loss_unnorm
 
     def train(self, n_epochs=100):
@@ -338,7 +338,6 @@ class DDPTrainer:
             self.epoch = 0
             epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, 0)
             train_loss = np.mean(train_loss)
-
         for epoch in range(self.start_epoch, n_epochs):
             self.epoch = epoch
 
@@ -359,6 +358,7 @@ class DDPTrainer:
                         out_inf = torch.isinf(out).any().item()
                         tgt_inf = torch.isinf(tgt).any().item()
                         if out_nan or tgt_nan or out_inf or tgt_inf:
+
                             def _safe_min_max(tensor):
                                 if hasattr(torch, "nanmin"):
                                     return (
@@ -366,9 +366,15 @@ class DDPTrainer:
                                         torch.nanmax(tensor).item(),
                                     )
                                 inf = torch.tensor(float("inf"), device=tensor.device)
-                                neg_inf = torch.tensor(float("-inf"), device=tensor.device)
-                                t_min = torch.min(torch.where(torch.isnan(tensor), inf, tensor))
-                                t_max = torch.max(torch.where(torch.isnan(tensor), neg_inf, tensor))
+                                neg_inf = torch.tensor(
+                                    float("-inf"), device=tensor.device
+                                )
+                                t_min = torch.min(
+                                    torch.where(torch.isnan(tensor), inf, tensor)
+                                )
+                                t_max = torch.max(
+                                    torch.where(torch.isnan(tensor), neg_inf, tensor)
+                                )
                                 return t_min.item(), t_max.item()
 
                             out_min, out_max = _safe_min_max(out)
@@ -384,7 +390,6 @@ class DDPTrainer:
                                 flush=True,
                             )
                             self._warned_nan_train = True
-
                     loss = self.loss_function(
                         task["y_target"], out, prev_step, fix_sigma=fix_sigma
                     )
@@ -402,7 +407,6 @@ class DDPTrainer:
                                 self.scheduler.step()
                     except:
                         pass
-
             epoch_loss, log_loss_unnorm = self.eval_epoch(fix_sigma, epoch)
             train_loss = np.mean(train_loss)
             if self.rank == 0:
@@ -450,7 +454,6 @@ class DDPTrainer:
                             },
                             self.save_path + "epoch_{}".format(epoch),
                         )
-
                 try:
                     np.save(
                         self.save_path + "preds_train.npy".format(epoch),
@@ -462,7 +465,6 @@ class DDPTrainer:
                     )
                 except:
                     pass
-
             if self.rank == 0:
                 self._save_last_checkpoint(epoch, epoch_loss)
 
@@ -518,7 +520,6 @@ class DDPTrainerE2E:
             self.opt = torch.optim.Adam(
                 model.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
-
         self.losses = []
         self.train_losses = []
 
@@ -531,9 +532,10 @@ class DDPTrainerE2E:
             print(f"Warning: weights path not found, skipping load: {weights_path}")
             return
         if os.path.isdir(weights_path):
-            print(f"Warning: weights path is a directory, skipping load: {weights_path}")
+            print(
+                f"Warning: weights path is a directory, skipping load: {weights_path}"
+            )
             return
-
         checkpoint = torch.load(weights_path, map_location="cpu")
         if isinstance(checkpoint, dict):
             state_dict = (
@@ -543,12 +545,12 @@ class DDPTrainerE2E:
             )
         else:
             state_dict = checkpoint
-
         if isinstance(state_dict, dict) and state_dict:
             keys = list(state_dict.keys())
             if keys and keys[0].startswith("module."):
-                state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
-
+                state_dict = {
+                    k.replace("module.", "", 1): v for k, v in state_dict.items()
+                }
         self.model.load_state_dict(state_dict, strict=False)
 
     def _unravel_to_numpy(self, x):
@@ -568,9 +570,7 @@ class DDPTrainerE2E:
             stations = []
             indices = []
             use_tqdm = self.rank == 0 and sys.stdout.isatty()
-            for count, task in tqdm(
-                enumerate(self.val_loader), disable=not use_tqdm
-            ):
+            for count, task in tqdm(enumerate(self.val_loader), disable=not use_tqdm):
 
                 out = self.model(task, film_index=0)
                 forecasts.append(
@@ -634,11 +634,10 @@ class DDPTrainerE2E:
                     )
 
                     lf_unnorm.append(lu)
-
                 except:
                     pass
-
             # Save the test outputs
+
             np.save(
                 self.save_path + f"val_forecast_{self.rank}_{self.epoch}.npy",
                 np.concatenate(forecasts, axis=0),
@@ -679,7 +678,6 @@ class DDPTrainerE2E:
                         task["downscaling"]["x_target"].detach().cpu().numpy() * 360
                     )
                     indices.append(task["index"])
-
                 np.save(
                     self.save_path + f"test_forecast_{self.rank}_{self.epoch}.npy",
                     np.concatenate(forecasts, axis=0),
@@ -696,7 +694,6 @@ class DDPTrainerE2E:
                     self.save_path + f"test_indices_{self.rank}_{self.epoch}.npy",
                     np.concatenate(indices, axis=0),
                 )
-
         log_loss = np.nanmean(np.array(lf))
 
         if log_loss < self.best_loss:
@@ -719,7 +716,6 @@ class DDPTrainerE2E:
             np.save(
                 self.save_path + "y_target_eval.npy", task["y_target"].cpu().numpy()
             )
-
         return log_loss, log_loss_unnorm
 
     def train(self, n_epochs=100):
@@ -782,7 +778,6 @@ class DDPTrainerE2E:
                             },
                             self.save_path + "epoch_{}".format(epoch),
                         )
-
                 try:
                     np.save(
                         self.save_path + "preds_train.npy".format(epoch),
@@ -794,14 +789,11 @@ class DDPTrainerE2E:
                     )
                 except:
                     pass
-
             self.model.train()
             train_loss = []
             use_tqdm = self.rank == 0 and sys.stdout.isatty()
             with tqdm(self.train_loader, unit="batch", disable=not use_tqdm) as tepoch:
-                for count, task in tqdm(
-                    enumerate(tepoch), disable=not use_tqdm
-                ):
+                for count, task in tqdm(enumerate(tepoch), disable=not use_tqdm):
                     out = self.model(task, film_index=0)
 
                     loss = self.loss_function(

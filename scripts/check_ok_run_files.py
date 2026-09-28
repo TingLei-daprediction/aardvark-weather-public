@@ -186,7 +186,9 @@ def main():
         if not val or "$" in val:
             err(f"--{name} is unset or contains an unexpanded shell variable")
     if flags.get("obs_set") != "rtma_surface":
-        warn(f"--obs_set is {flags.get('obs_set')!r}; this checker assumes rtma_surface")
+        warn(
+            f"--obs_set is {flags.get('obs_set')!r}; this checker assumes rtma_surface"
+        )
 
     # Same grid config the run will install. --grid_config is relative to rundir.
     gc = flags.get("grid_config", "")
@@ -209,12 +211,21 @@ def main():
         sys.exit(1)
 
     print("\n== Dates ==")
-    d = {k: parse_date(flags, f"assim_{k}") for k in
-         ("train_start_date", "train_end_date", "val_start_date", "val_end_date")}
+    d = {
+        k: parse_date(flags, f"assim_{k}")
+        for k in (
+            "train_start_date",
+            "train_end_date",
+            "val_start_date",
+            "val_end_date",
+        )
+    }
     months = []
     if all(d.values()):
-        for a, b in [(d["train_start_date"], d["train_end_date"]),
-                     (d["val_start_date"], d["val_end_date"])]:
+        for a, b in [
+            (d["train_start_date"], d["train_end_date"]),
+            (d["val_start_date"], d["val_end_date"]),
+        ]:
             if a > b:
                 err(f"date range reversed: {a} > {b}")
             months += [m for m in month_range(a, b) if m not in months]
@@ -226,8 +237,10 @@ def main():
         lon = np.load(loader_grid_x_path(data_path))
         lat = np.load(loader_grid_y_path(data_path))
         nlon, nlat = lon.shape[0], lat.shape[0]
-        ok(f"loader axes: nlon={nlon}, nlat={nlat}, "
-           f"lon [{lon.min():.3f}, {lon.max():.3f}], lat [{lat.min():.3f}, {lat.max():.3f}]")
+        ok(
+            f"loader axes: nlon={nlon}, nlat={nlat}, "
+            f"lon [{lon.min():.3f}, {lon.max():.3f}], lat [{lat.min():.3f}, {lat.max():.3f}]"
+        )
     except FileNotFoundError as e:
         err(f"loader grid axes: {e}")
     try:
@@ -246,7 +259,9 @@ def main():
     if os.path.isfile(ep):
         elev = np.load(ep)
         if elev.shape != (4, nlat, nlon):
-            err(f"elev_vars shape {elev.shape} != (4, {nlat}, {nlon}) [(4, nlat, nlon)]")
+            err(
+                f"elev_vars shape {elev.shape} != (4, {nlat}, {nlon}) [(4, nlat, nlon)]"
+            )
         else:
             # Same orientation check the loader hard-asserts at startup: channel 2 is
             # sin(latitude), so a N-S flipped or wrong-grid file fails here, not mid-run.
@@ -263,8 +278,10 @@ def main():
         missing("elev_vars", ep)
 
     channels = None
-    for name, path in [("target mean", norm_mean_path(aux_path, era5_mode)),
-                       ("target std", norm_std_path(aux_path, era5_mode))]:
+    for name, path in [
+        ("target mean", norm_mean_path(aux_path, era5_mode)),
+        ("target std", norm_std_path(aux_path, era5_mode)),
+    ]:
         if not os.path.isfile(path):
             missing(name, path)
             continue
@@ -295,8 +312,12 @@ def main():
     background_frames_per_day = 24 if background_mode == "hourly" else 1
     for y, m in months:
         frames = days_in_month(y, m) * frames_per_day
-        check_memmap(era5_month_path(data_path, era5_mode, freq_tag, y, m),
-                     frames, ch * grid_bytes, f"target {y}-{m:02d}")
+        check_memmap(
+            era5_month_path(data_path, era5_mode, freq_tag, y, m),
+            frames,
+            ch * grid_bytes,
+            f"target {y}-{m:02d}",
+        )
         check_memmap(
             background_path(data_path, era5_mode, y, m),
             days_in_month(y, m) * background_frames_per_day,
@@ -370,7 +391,9 @@ def main():
             # Backward-compatible monthly RTMA mode uses one shared scalar per variable;
             # all nonmonthly/global loader behavior is unchanged.
             for stat in ("mean", "std"):
-                path = os.path.join(aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy")
+                path = os.path.join(
+                    aux_path, "norm_factors", f"{stat}_hadisd_{var}.npy"
+                )
                 if not os.path.isfile(path):
                     missing(f"obs {var} {stat}", path)
                     continue
@@ -391,8 +414,10 @@ def main():
     if errors:
         print("NOT READY -- fix the errors above before submitting.")
         sys.exit(1)
-    print("READY: all files the loader will open are present and consistent."
-          + (" Review warnings above." if warnings else ""))
+    print(
+        "READY: all files the loader will open are present and consistent."
+        + (" Review warnings above." if warnings else "")
+    )
 
 
 if __name__ == "__main__":

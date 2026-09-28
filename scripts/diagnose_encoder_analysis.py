@@ -166,7 +166,9 @@ def load_saved_pair(
     return np.load(pred_path), np.load(target_path), pred_path, target_path
 
 
-def align_channels_last(pred: np.ndarray, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def align_channels_last(
+    pred: np.ndarray, target: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     """Accept saved channels-last arrays and a limited legacy channels-first layout."""
     if pred.ndim != 4 or target.ndim != 4:
         raise ValueError(
@@ -230,7 +232,9 @@ def load_background(
         require_memmap_size(raw_path, shape, "raw monthly background")
         raw = np.memmap(raw_path, dtype="float32", mode="r", shape=shape)
         raw_field = np.asarray(raw[day_index, channel, :, :]).T
-        if not np.allclose(physical, raw_field, rtol=2.0e-6, atol=1.0e-5, equal_nan=True):
+        if not np.allclose(
+            physical, raw_field, rtol=2.0e-6, atol=1.0e-5, equal_nan=True
+        ):
             delta = np.abs(physical - raw_field)
             raise ValueError(
                 "denormalized background does not match its raw-background witness: "
@@ -256,7 +260,11 @@ def load_observations(
     alt_path = obs_dir / f"{variable}_alt_train-{month_tag}.npy"
     value_path = obs_dir / f"{variable}_vals_{freq_tag}_{month_tag}.memmap"
 
-    for label, path in (("longitude", lon_path), ("latitude", lat_path), ("altitude", alt_path)):
+    for label, path in (
+        ("longitude", lon_path),
+        ("latitude", lat_path),
+        ("altitude", alt_path),
+    ):
         if not path.is_file():
             raise FileNotFoundError(f"observation {label} file not found: {path}")
 
@@ -281,7 +289,9 @@ def load_observations(
     return lon[valid], lat[valid], values[valid], value_path
 
 
-def warn_if_implausible(name: str, values: np.ndarray, limits: Tuple[float, float]) -> None:
+def warn_if_implausible(
+    name: str, values: np.ndarray, limits: Tuple[float, float]
+) -> None:
     finite = values[np.isfinite(values)]
     if finite.size == 0:
         raise ValueError(f"{name} contains no finite values")
@@ -341,11 +351,13 @@ def calculate_metrics(
         pred_mask = region_mask & np.isfinite(prediction) & np.isfinite(truth)
         bg_mask = region_mask & np.isfinite(background) & np.isfinite(truth)
         if not np.any(pred_mask) or not np.any(bg_mask):
-            raise ValueError(f"region {region!r} has no finite points for metric calculation")
+            raise ValueError(
+                f"region {region!r} has no finite points for metric calculation"
+            )
         pred_error = prediction[pred_mask] - truth[pred_mask]
         bg_error = background[bg_mask] - truth[bg_mask]
-        pred_mse = float(np.mean(pred_error ** 2))
-        bg_mse = float(np.mean(bg_error ** 2))
+        pred_mse = float(np.mean(pred_error**2))
+        bg_mse = float(np.mean(bg_error**2))
         pred_rmse = math.sqrt(pred_mse)
         bg_rmse = math.sqrt(bg_mse)
         output[region] = {
@@ -358,7 +370,9 @@ def calculate_metrics(
             "prediction_bias": float(np.mean(pred_error)),
             "background_bias": float(np.mean(bg_error)),
             "rmse_improvement": bg_rmse - pred_rmse,
-            "mse_skill_score": float(1.0 - pred_mse / bg_mse) if bg_mse > 0.0 else np.nan,
+            "mse_skill_score": (
+                float(1.0 - pred_mse / bg_mse) if bg_mse > 0.0 else np.nan
+            ),
         }
     return output
 
@@ -369,11 +383,15 @@ def add_map_features(ax) -> None:
     ax.add_feature(cfeature.COASTLINE, linewidth=0.6, edgecolor="black")
     ax.add_feature(cfeature.STATES, linewidth=0.6, edgecolor="black")
     if HAS_METPY_COUNTIES:
-        ax.add_feature(USCOUNTIES.with_scale("20m"), linewidth=0.25, edgecolor="gray", alpha=0.6)
+        ax.add_feature(
+            USCOUNTIES.with_scale("20m"), linewidth=0.25, edgecolor="gray", alpha=0.6
+        )
 
 
 def finite_limits(*fields: np.ndarray) -> Tuple[float, float]:
-    finite = [field[np.isfinite(field)] for field in fields if np.any(np.isfinite(field))]
+    finite = [
+        field[np.isfinite(field)] for field in fields if np.any(np.isfinite(field))
+    ]
     if not finite:
         return -1.0, 1.0
     merged = np.concatenate(finite)
@@ -386,7 +404,11 @@ def finite_limits(*fields: np.ndarray) -> Tuple[float, float]:
 
 
 def symmetric_limit(*fields: np.ndarray) -> float:
-    finite = [np.abs(field[np.isfinite(field)]) for field in fields if np.any(np.isfinite(field))]
+    finite = [
+        np.abs(field[np.isfinite(field)])
+        for field in fields
+        if np.any(np.isfinite(field))
+    ]
     if not finite:
         return 1.0
     result = float(np.max(np.concatenate(finite)))
@@ -432,7 +454,9 @@ def plot_diagnostics(
     else:
         projection = None
         subplot_kw = {}
-        print("[WARN] Cartopy is unavailable; drawing array axes without map boundaries")
+        print(
+            "[WARN] Cartopy is unavailable; drawing array axes without map boundaries"
+        )
 
     fig, axes = plt.subplots(
         3, 3, figsize=(15, 12), constrained_layout=True, subplot_kw=subplot_kw
@@ -448,7 +472,9 @@ def plot_diagnostics(
         (axes[0, 2], background, "00 UTC background persistence"),
     )
     for ax, field, title in field_panels:
-        image = ax.imshow(field, cmap="viridis", vmin=field_min, vmax=field_max, **image_kwargs)
+        image = ax.imshow(
+            field, cmap="viridis", vmin=field_min, vmax=field_max, **image_kwargs
+        )
         ax.set_title(title)
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=str(info["units"]))
 
@@ -456,15 +482,23 @@ def plot_diagnostics(
         (axes[1, 0], prediction_error, "Analysis - truth"),
         (axes[1, 1], background_error, "Background - truth"),
     ):
-        image = ax.imshow(field, cmap="RdBu_r", vmin=-error_limit, vmax=error_limit, **image_kwargs)
+        image = ax.imshow(
+            field, cmap="RdBu_r", vmin=-error_limit, vmax=error_limit, **image_kwargs
+        )
         ax.set_title(title)
         fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label=str(info["units"]))
 
     image = axes[1, 2].imshow(
-        increment, cmap="RdBu_r", vmin=-increment_limit, vmax=increment_limit, **image_kwargs
+        increment,
+        cmap="RdBu_r",
+        vmin=-increment_limit,
+        vmax=increment_limit,
+        **image_kwargs,
     )
     axes[1, 2].set_title("Analysis - background")
-    fig.colorbar(image, ax=axes[1, 2], fraction=0.046, pad=0.04, label=str(info["units"]))
+    fig.colorbar(
+        image, ax=axes[1, 2], fraction=0.046, pad=0.04, label=str(info["units"])
+    )
 
     obs_min, obs_max = finite_limits(obs_values)
     scatter_kwargs = {
@@ -485,10 +519,14 @@ def plot_diagnostics(
     axes[2, 0].set_title(obs_title)
     axes[2, 0].set_xlim(extent[0], extent[1])
     axes[2, 0].set_ylim(extent[2], extent[3])
-    fig.colorbar(scatter, ax=axes[2, 0], fraction=0.046, pad=0.04, label=str(info["units"]))
+    fig.colorbar(
+        scatter, ax=axes[2, 0], fraction=0.046, pad=0.04, label=str(info["units"])
+    )
 
     image = axes[2, 1].imshow(distance, cmap="magma", **image_kwargs)
-    axes[2, 1].set_title(f"Distance to nearest valid observation\nnear <= {radius_km:g} km")
+    axes[2, 1].set_title(
+        f"Distance to nearest valid observation\nnear <= {radius_km:g} km"
+    )
     contour_kwargs = {}
     if projection is not None:
         contour_kwargs["transform"] = projection
@@ -600,7 +638,8 @@ def write_metrics_csv(
             row = dict(metrics[region])
             row.update(
                 {
-                    "analysis_time_utc": analysis_time.isoformat(timespec="minutes") + "Z",
+                    "analysis_time_utc": analysis_time.isoformat(timespec="minutes")
+                    + "Z",
                     "channel": channel,
                     "analysis_variable": info["analysis"],
                     "observation_variable": info["observation"],
@@ -619,7 +658,9 @@ def write_metrics_csv(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run_dir", required=True, help="Directory with unnorm inference arrays")
+    parser.add_argument(
+        "--run_dir", required=True, help="Directory with unnorm inference arrays"
+    )
     parser.add_argument("--analysis_time", required=True, type=parse_analysis_time)
     parser.add_argument("--data_root", required=True, help="RTMA-OK data root")
     parser.add_argument(
@@ -631,12 +672,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--time_freq", default="1H")
     parser.add_argument("--rank", default="0")
     parser.add_argument("--sample_index", type=int, default=0)
-    parser.add_argument("--channel", type=int, required=True, choices=range(len(CHANNELS)))
+    parser.add_argument(
+        "--channel", type=int, required=True, choices=range(len(CHANNELS))
+    )
     parser.add_argument("--obs_radius_km", type=float, required=True)
     parser.add_argument("--pred_file", help="Override prediction file path")
     parser.add_argument("--target_file", help="Override target file path")
     parser.add_argument("--out", help="Output PNG; default is generated under run_dir")
-    parser.add_argument("--csv_out", help="Output CSV; default matches the generated PNG")
+    parser.add_argument(
+        "--csv_out", help="Output CSV; default matches the generated PNG"
+    )
     parser.add_argument("--distance_chunk_size", type=int, default=1024)
     parser.add_argument("--target_rtol", type=float, default=2.0e-6)
     parser.add_argument("--target_atol", type=float, default=1.0e-5)
@@ -676,7 +721,9 @@ def main() -> None:
     lon_path = Path(loader_grid_x_path(str(data_root)))
     lat_path = Path(loader_grid_y_path(str(data_root)))
     if not lon_path.is_file() or not lat_path.is_file():
-        raise FileNotFoundError(f"grid coordinate files not found: {lon_path}, {lat_path}")
+        raise FileNotFoundError(
+            f"grid coordinate files not found: {lon_path}, {lat_path}"
+        )
     grid_lon = np.asarray(np.load(lon_path)).reshape(-1)
     grid_lat = np.asarray(np.load(lat_path)).reshape(-1)
     if grid_lon.size == 0 or grid_lat.size == 0:
@@ -699,8 +746,14 @@ def main() -> None:
             f"target norm factors must each contain {len(CHANNELS)} scalars: "
             f"mean={mean.shape}, std={std.shape}"
         )
-    if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)) or np.any(std <= 0.0):
-        raise ValueError("target normalization factors must be finite with strictly positive std")
+    if (
+        not np.all(np.isfinite(mean))
+        or not np.all(np.isfinite(std))
+        or np.any(std <= 0.0)
+    ):
+        raise ValueError(
+            "target normalization factors must be finite with strictly positive std"
+        )
 
     channel_info = CHANNELS[args.channel]
     prediction = np.asarray(pred[0, :, :, args.channel])
@@ -748,9 +801,13 @@ def main() -> None:
 
     warn_if_implausible("saved truth", saved_truth, channel_info["physical_range"])
     warn_if_implausible("prediction", prediction, channel_info["physical_range"])
-    warn_if_implausible("physical background", background, channel_info["physical_range"])
     warn_if_implausible(
-        f"{channel_info['observation']} observations", obs_values, channel_info["obs_range"]
+        "physical background", background, channel_info["physical_range"]
+    )
+    warn_if_implausible(
+        f"{channel_info['observation']} observations",
+        obs_values,
+        channel_info["obs_range"],
     )
 
     distance = nearest_observation_distance_km(
@@ -823,7 +880,9 @@ def main() -> None:
     if raw_background_path is not None:
         print(f"Raw-background witness passed: {raw_background_path}")
     else:
-        print("[INFO] raw background sibling not found; orientation follows the documented file contract")
+        print(
+            "[INFO] raw background sibling not found; orientation follows the documented file contract"
+        )
     print(f"Valid {channel_info['observation']} observations: {obs_values.size}")
     for region in ("full", "near", "far"):
         row = metrics[region]

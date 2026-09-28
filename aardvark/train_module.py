@@ -88,7 +88,9 @@ def expected_in_channels_assimilation(
     obs_set="all",
 ):
     # convDeepSet encoders output density + value per channel (2x).
-    aux_total = 4 + climatology_channels + 5  # elev vars + climatology + aux time channels
+    aux_total = (
+        4 + climatology_channels + 5
+    )  # elev vars + climatology + aux time channels
     if obs_set == "rtma_surface":
         # RTMA Phase 1: HadISD surface obs (5 vars x 2) + aux only; single frame.
         return 2 * 5 + aux_total
@@ -97,7 +99,9 @@ def expected_in_channels_assimilation(
     hirs = 2 * hirs_channels
     sat = 2 * 2
     icoads = 2 * 5
-    hadisd = 2 * 5  # tas, tds, psl, u, v (all 5 HadISD vars now encoded; see docs/plan_hadisd_v_drop.md)
+    hadisd = (
+        2 * 5
+    )  # tas, tds, psl, u, v (all 5 HadISD vars now encoded; see docs/plan_hadisd_v_drop.md)
     igra = 0 if disable_igra else 2 * 24
     ascat = ascat_channels
     iasi = iasi_channels
@@ -137,7 +141,9 @@ def main(rank, world_size, output_dir, args):
     lead_time = args.lead_time
     era5_mode = args.era5_mode
     if args.obs_set == "rtma_surface" and bool(args.two_frames):
-        raise ValueError("--obs_set rtma_surface currently supports only --two_frames 0")
+        raise ValueError(
+            "--obs_set rtma_surface currently supports only --two_frames 0"
+        )
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
     if args.seed is not None:
@@ -157,15 +163,12 @@ def main(rank, world_size, output_dir, args):
         args.int_x = grid_cfg["int_x"]
     if args.int_y is None:
         args.int_y = grid_cfg["int_y"]
-#clt
-    if torch.cuda.is_available() :
+    # clt
+    if torch.cuda.is_available():
         device_name = "cuda"
-        torch.set_float32_matmul_precision(
-            "high"
-        )  # Allows using Tensor Cores on A100s
+        torch.set_float32_matmul_precision("high")  # Allows using Tensor Cores on A100s
     else:
         device_name = "cpu"
-
 
     # Instantiate loss function
     if args.loss == "lw_rmse":
@@ -177,9 +180,7 @@ def main(rank, world_size, output_dir, args):
             weight_per_variable=bool(args.weight_per_variable),
         )
     elif args.loss == "lw_rmse_pressure_weighted":
-        lf = PressureWeightedRmseLoss(
-            era5_mode, args.data_path, args.aux_data_path
-        )
+        lf = PressureWeightedRmseLoss(era5_mode, args.data_path, args.aux_data_path)
     elif args.loss == "rmse":
         lf = RmseLoss(
             start_ind=0,
@@ -199,7 +200,8 @@ def main(rank, world_size, output_dir, args):
             start_date=args.assim_train_start_date,
             end_date=args.assim_train_end_date,
             lead_time=0,
-            era5_mode=args.era5_mode,            var_start=args.start_ind,
+            era5_mode=args.era5_mode,
+            var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
@@ -219,7 +221,8 @@ def main(rank, world_size, output_dir, args):
             start_date=args.assim_val_start_date,
             end_date=args.assim_val_end_date,
             lead_time=0,
-            era5_mode=args.era5_mode,            var_start=args.start_ind,
+            era5_mode=args.era5_mode,
+            var_start=args.start_ind,
             var_end=args.end_ind,
             diff=bool(args.diff),
             two_frames=bool(args.two_frames),
@@ -241,7 +244,8 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="train",
                 lead_time=lead_time,
-                era5_mode=era5_mode,                frequency=args.frequency,
+                era5_mode=era5_mode,
+                frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 random_lt=True,
@@ -252,7 +256,8 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="val",
                 lead_time=lead_time,
-                era5_mode=era5_mode,                frequency=args.frequency,
+                era5_mode=era5_mode,
+                frequency=args.frequency,
                 diff=bool(args.diff),
                 aardvark_ic_path=args.aardvark_ic_path,
                 data_path=args.data_path,
@@ -263,7 +268,8 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="train",
                 lead_time=lead_time,
-                era5_mode=era5_mode,                frequency=args.frequency,
+                era5_mode=era5_mode,
+                frequency=args.frequency,
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
@@ -276,7 +282,8 @@ def main(rank, world_size, output_dir, args):
                 device=device_name,
                 mode="val",
                 lead_time=lead_time,
-                era5_mode=era5_mode,                frequency=args.frequency,
+                era5_mode=era5_mode,
+                frequency=args.frequency,
                 diff=bool(args.diff),
                 u_only=False,
                 random_lt=False,
@@ -331,7 +338,8 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=args.end_ind - args.start_ind,
             int_channels=args.int_channels,
-            device=device_name,            decoder=args.decoder,
+            device=device_name,
+            decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
             data_path=args.model_data_path,
@@ -402,7 +410,8 @@ def main(rank, world_size, output_dir, args):
             in_channels=args.in_channels,
             out_channels=model_out_channels,
             int_channels=args.int_channels,
-            device=device_name,            gnp=bool(0),
+            device=device_name,
+            gnp=bool(0),
             decoder=args.decoder,
             mode=args.mode,
             film=bool(args.film),
@@ -495,7 +504,9 @@ if __name__ == "__main__":
     parser.add_argument("--epoch", type=int, default=50)
     parser.add_argument("--master_port", default="12345")
     parser.add_argument("--backend", default="nccl", help="DDP backend (nccl or gloo)")
-    parser.add_argument("--world_size", type=int, default=None, help="Override world size")
+    parser.add_argument(
+        "--world_size", type=int, default=None, help="Override world size"
+    )
     parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--lead_time", type=int)
     parser.add_argument(
@@ -606,7 +617,9 @@ if __name__ == "__main__":
     if (
         args.assim_train_months_file or args.assim_val_months_file
     ) and args.mode != "assimilation":
-        parser.error("assimilation month manifests are supported only with --mode assimilation")
+        parser.error(
+            "assimilation month manifests are supported only with --mode assimilation"
+        )
 
     try:
         train_months = (
