@@ -39,6 +39,12 @@ source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-en
 # conda env's own packages. Clear it so only aardvark-env is visible.
 unset PYTHONPATH
 set -euo pipefail
+export TARGET_MODE="${TARGET_MODE:-analysis}"
+case "$TARGET_MODE" in
+  analysis|increment) ;;
+  *) echo "ERROR: TARGET_MODE must be analysis or increment" >&2; exit 1 ;;
+esac
+echo "Target mode: $TARGET_MODE"
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd $rundir
 
@@ -58,6 +64,10 @@ output_dir="${output_prefix}/OK-infer-${time_token}/"
 for v in data_root aux_data_root model_data_dir; do
   [[ -n "${!v}" ]] || { echo "ERROR: $v is not set; edit this script first."; exit 1; }
 done
+if [[ "$TARGET_MODE" == increment ]]; then
+  [[ "${BACKGROUND_MODE:-daily_00z}" == hourly ]] || { echo "ERROR: increment requires BACKGROUND_MODE=hourly" >&2; exit 1; }
+  output_dir="${output_dir%/}-increment/"
+fi
 mkdir -p "$output_dir"
 
 echo "Inference time: ${infer_time}  (single-timestamp train/val dataset)"
@@ -66,6 +76,7 @@ echo "Output dir:     ${output_dir}"
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --target_mode "${TARGET_MODE:-analysis}" \
   --background_input "${BACKGROUND_INPUT:-normalized}" \
   --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   --weights_dir "$checkpoint" \
@@ -92,10 +103,16 @@ python ../aardvark/train_module.py \
   --assim_val_start_date "$infer_time" \
   --assim_val_end_date "$infer_time" \
   --time_freq 1H \
+  --background_mode "${BACKGROUND_MODE:-daily_00z}" \
+  --world_size 1 \
   --obs_norm_mode monthly \
   --grid_config ../aardvark/grid_config_ok_reduced_grid_B.yaml
 
-echo "Done. Outputs in ${output_dir}:"
-ls -l "${output_dir}"unnorm_preds_0.npy "${output_dir}"unnorm_targets_0.npy
-echo "Plot a channel (0=t2m 1=q2m 2=sp 3=u10 4=v10) with:"
-echo "  python ../scripts/plot_encoder_field.py --run_dir ${output_dir} --rank 0 --sample_index 0 --channel 0"
+echo "Done. Outputs in ${output_dir} (last validation batch):"
+if [[ "$TARGET_MODE" == increment ]]; then
+  ls -l "${output_dir}"unnorm_increment_{preds,targets}_0.npy "${output_dir}"unnorm_analysis_{preds,targets}_0.npy
+  echo "Diagnostics: use --pred_file unnorm_analysis_preds_0.npy --target_file unnorm_analysis_targets_0.npy --background_mode hourly"
+else
+  ls -l "${output_dir}"unnorm_preds_0.npy "${output_dir}"unnorm_targets_0.npy
+  echo "Plot: python ../scripts/plot_encoder_field.py --run_dir ${output_dir} --rank 0 --sample_index 0 --channel 0"
+fi

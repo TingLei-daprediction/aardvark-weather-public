@@ -11,6 +11,14 @@ from background_normalization import (
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+from increment_data import (
+    TARGET_FORMAT,
+    check_training_months,
+    load_increment_norms,
+    validate_target_mode,
+    verify_increment_input,
+    verify_increment_sources,
+)
 
 from loader_utils_new import *
 from data_shapes import *
@@ -25,6 +33,7 @@ from grid_config import (
     background_input_path,
     background_month_path,
     background_hourly_month_path,
+    increment_month_path,
 )
 
 
@@ -101,6 +110,8 @@ class WeatherDataset(Dataset):
         selected_months=None,
         sample_stride=1,
         background_input="normalized",
+        target_mode="analysis",
+        verify_increment_hashes=False,
     ):
 
         super().__init__()
@@ -145,6 +156,16 @@ class WeatherDataset(Dataset):
             self.time_freq
         )
         self.monthly = self.surface_only and self.time_freq in ("15min", "1H")
+        validate_target_mode(
+            target_mode, self.monthly, time_freq, background_mode, bool(diff)
+        )
+        self.target_mode = target_mode
+        self.verify_increment_hashes = verify_increment_hashes
+        self.target_normalization = None
+        if target_mode == "increment":
+            self.means, self.stds, self.target_normalization = load_increment_norms(
+                self.aux_data_path, self.era5_mode
+            )
         validate_background_input(background_input, self.monthly, bool(diff))
         self.selected_months = (
             {tuple(map(int, value.split("-"))) for value in selected_months}
@@ -368,12 +389,33 @@ class WeatherDataset(Dataset):
                 :, np.newaxis, np.newaxis, ...
             ]
         else:
-            self.means = np.load(norm_mean_path(self.aux_data_path, self.era5_mode))[
-                :, np.newaxis, np.newaxis, ...
-            ]
-            self.stds = np.load(norm_std_path(self.aux_data_path, self.era5_mode))[
-                :, np.newaxis, np.newaxis, ...
-            ]
+            # Target factors may describe increments; background factors ALWAYS describe analyses.
+            if self.target_mode == "increment":
+                if self.means.shape[0] != self.era5_channels:
+                    raise ValueError(
+                        "increment factors do not match target channel count"
+                    )
+                if (
+                    self.target_normalization.get("analysis_std_sha256")
+                    != self.background_normalization["std_file_sha256"]
+                ):
+                    raise ValueError(
+                        "analysis std changed since increment statistics were computed"
+                    )
+            else:
+                self.means = np.load(
+                    norm_mean_path(self.aux_data_path, self.era5_mode)
+                )[:, np.newaxis, np.newaxis, ...]
+                self.stds = np.load(norm_std_path(self.aux_data_path, self.era5_mode))[
+                    :, np.newaxis, np.newaxis, ...
+                ]
+                if self.monthly:
+                    self.target_normalization = {
+                        **self.background_normalization,
+                        "format": TARGET_FORMAT,
+                        "target_mode": "analysis",
+                        "training_months": [],
+                    }
 
     def _infer_time_dim(self, path, fixed_shape):
         file_bytes = os.path.getsize(path)
@@ -727,9 +769,10 @@ class WeatherDataset(Dataset):
     def _era5_month_path(self, year, month):
         # Name comes from the grid-config "era5_month" template (override in the YAML to
         # rename the "era5" dir/prefix for a regional dataset).
-        return era5_month_path(
-            self.data_path, self.era5_mode, self.freq_tag, year, month
+        path_function = (
+            increment_month_path if self.target_mode == "increment" else era5_month_path
         )
+        return path_function(self.data_path, self.era5_mode, self.freq_tag, year, month)
 
     def _load_era5_monthly(self):
         """Open per-month ERA5 target memmaps keyed by (year, month).
@@ -760,6 +803,35 @@ class WeatherDataset(Dataset):
                     f"{frames_expected} (days_in_month*{self.frames_per_day}); "
                     "obs/target alignment requires an exact match"
                 )
+            if self.target_mode == "increment":
+                product = verify_increment_input(
+                    path,
+                    (frames_expected, channels, self.nlon, self.nlat),
+                    year,
+                    month,
+                    self.target_normalization,
+                    self.verify_increment_hashes,
+                )
+                verify_increment_sources(
+                    product,
+                    era5_month_path(
+                        self.data_path, self.era5_mode, self.freq_tag, year, month
+                    ),
+                    (
+                        self._background_month_path(year, month)
+                        if self.background_input == "raw"
+                        else None
+                    ),
+                    (frames_expected, channels, self.nlon, self.nlat),
+                    year,
+                    month,
+                    rehash=self.verify_increment_hashes,
+                )
+                if product.get("channel_order_source") == "override":
+                    print(
+                        f"[WARN] increment input has legacy channel-order override: {path}",
+                        flush=True,
+                    )
             era5[(year, month)] = np.memmap(
                 path,
                 dtype="float32",
@@ -1158,6 +1230,9 @@ class WeatherDatasetAssimilation(WeatherDataset):
         selected_months=None,
         sample_stride=1,
         background_input="normalized",
+        target_mode="analysis",
+        verify_increment_hashes=False,
+        include_physical_targets=False,
     ):
 
         super().__init__(
@@ -1179,6 +1254,8 @@ class WeatherDatasetAssimilation(WeatherDataset):
             background_input=background_input,
             selected_months=selected_months,
             sample_stride=sample_stride,
+            target_mode=target_mode,
+            verify_increment_hashes=verify_increment_hashes,
         )
 
         # Setup
@@ -1187,6 +1264,17 @@ class WeatherDatasetAssimilation(WeatherDataset):
         self.var_end = var_end
         self.diff = diff
         self.two_frames = two_frames
+        # Only validation needs full physical fields; training should read one target frame.
+        self.include_physical_targets = include_physical_targets
+        self.analysis_truth = {}
+        if include_physical_targets and self.monthly and target_mode == "increment":
+            for (year, month), increment in self.era5_sfc.items():
+                path = era5_month_path(
+                    self.data_path, self.era5_mode, self.freq_tag, year, month
+                )
+                self.analysis_truth[(year, month)] = np.memmap(
+                    path, dtype="float32", mode="r", shape=increment.shape
+                )
         if getattr(self, "monthly", False) and self.two_frames:
             raise NotImplementedError(
                 "monthly per-month files (rtma_surface + 15min) do not support two_frames: "
@@ -1308,10 +1396,37 @@ class WeatherDatasetAssimilation(WeatherDataset):
         return torch.from_numpy(x).float().to(dev)
 
     def unnorm_base_context(self, x):
+        if self.target_mode == "increment":
+            raise ValueError(
+                "unnorm_base_context cannot use increment factors for a background; use physical_background"
+            )
         dev = x.device
         x = x.detach().cpu().numpy()
         x = x * self.stds[np.newaxis, ...] + self.means[np.newaxis, ...]
         return torch.from_numpy(x).float().to(dev)
+
+    def physical_background(self, task):
+        if "physical_background_current" in task:
+            return task["physical_background_current"]
+        background = task["climatology_current"]
+        mean = torch.as_tensor(self.background_means, device=background.device)
+        std = torch.as_tensor(self.background_stds, device=background.device)
+        # climatology_current is normalized in both raw and normalized input modes.
+        physical = background * std + mean
+        return physical.permute(0, 3, 2, 1)[..., self.var_start : self.var_end]
+
+    def physical_analysis(self, prediction, task):
+        result = self.unnorm_pred(prediction[..., : self.var_end - self.var_start])
+        if self.target_mode == "increment":
+            result = result + self.physical_background(task).to(result.device)
+        return result
+
+    def check_statistics_training_months(self):
+        if self.target_mode == "increment":
+            check_training_months(
+                [f"{y:04d}-{m:02d}" for y, m in self._month_keys()],
+                self.target_normalization,
+            )
 
     def get_index(self, index, prefix):
         """
@@ -1387,9 +1502,14 @@ class WeatherDatasetAssimilation(WeatherDataset):
             if self.background_mode == "hourly":
                 background_index = frame_in_month
             climatology = self.background[month_key][background_index, ...]
+            physical_background = climatology
             if self.background_input == "raw":
                 climatology = normalize_background_frame(
                     climatology, self.background_means, self.background_stds
+                )
+            elif not self.diff and self.include_physical_targets:
+                physical_background = (
+                    climatology * self.background_stds + self.background_means
                 )
         elif self.time_freq == "6H":
             climatology = self.climatology[date.hour // 6, date.dayofyear - 1, ...]
@@ -1409,6 +1529,20 @@ class WeatherDatasetAssimilation(WeatherDataset):
             "aux_time_{}".format(prefix): aux_time,
             "lt": torch.Tensor([self.var_start]),
         }
+        if self.include_physical_targets and self.monthly and not self.diff:
+            task["physical_background_{}".format(prefix)] = self.to_tensor(
+                np.array(physical_background, copy=True)
+            ).permute(2, 1, 0)[..., self.var_start : self.var_end]
+            # Read the actual analysis witness for metric truth, even when labels are increments.
+            if self.target_mode == "increment":
+                truth = np.array(
+                    self.analysis_truth[month_key][frame_in_month], copy=True
+                )
+            else:
+                truth = np.array(self.era5_sfc[month_key][frame_in_month], copy=True)
+            task["physical_analysis_{}".format(prefix)] = self.to_tensor(truth).permute(
+                2, 1, 0
+            )[..., self.var_start : self.var_end]
 
         # Global observation modalities -- skipped entirely for obs_set="rtma_surface".
         if not self.surface_only:
@@ -1736,7 +1870,10 @@ class WeatherDatasetDownscaling(Dataset):
         data_path=None,
         aux_data_path=None,
         time_freq="6H",
+        target_mode="analysis",
     ):
+        if target_mode != "analysis":
+            raise ValueError("increment targets are unsupported in downscaling")
         # The context mode determines whether we make use of ERA5 or our own ICs.
         if not context_mode in ["era5", "aardvark"]:
             raise Exception(
@@ -1995,7 +2132,10 @@ class ForecasterDatasetDownscaling(Dataset):
         data_path=None,
         aux_data_path=None,
         time_freq="6H",
+        target_mode="analysis",
     ):
+        if target_mode != "analysis":
+            raise ValueError("increment targets are unsupported in downscaling")
         super().__init__()
 
         # Setup
@@ -2190,7 +2330,10 @@ class ForecastLoader(Dataset):
         end_date=None,
         data_path=None,
         aux_data_path=None,
+        target_mode="analysis",
     ):
+        if target_mode != "analysis":
+            raise ValueError("increment targets are unsupported in forecast/finetuning")
 
         super().__init__()
 
@@ -2614,7 +2757,10 @@ class WeatherDatasetE2E(WeatherDataset):
         diff=False,
         two_frames=False,
         region="global",
+        target_mode="analysis",
     ):
+        if target_mode != "analysis":
+            raise ValueError("increment targets are unsupported in E2E")
 
         super().__init__(
             device,

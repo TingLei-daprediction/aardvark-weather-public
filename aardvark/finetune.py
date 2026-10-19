@@ -13,6 +13,8 @@ from collections import OrderedDict
 import numpy as np
 from tqdm import tqdm
 import torch
+from increment_data import check_target_checkpoint
+
 import torch.multiprocessing as mp
 import torch.utils.data.distributed
 from torch.utils.data import DataLoader, DistributedSampler
@@ -29,6 +31,12 @@ torch.set_float32_matmul_precision("medium")
 weights = np.load(
     "path_to_lat_weights/weights_lat_1.npy",
 ).T[np.newaxis, ..., np.newaxis]
+
+
+def load_analysis_checkpoint(*args, **kwargs):
+    checkpoint = torch.load(*args, **kwargs)
+    check_target_checkpoint(checkpoint, None)
+    return checkpoint
 
 
 def weighted_rmse_loss(target, output):
@@ -80,7 +88,8 @@ def main(rank, world_size, output_dir, args):
         in_channels=forecast_config["in_channels"],
         out_channels=forecast_config["out_channels"],
         int_channels=forecast_config["int_channels"],
-        device="cuda",        gnp=bool(0),
+        device="cuda",
+        gnp=bool(0),
         decoder=forecast_config["decoder"],
         mode=forecast_config["mode"],
         film=bool(forecast_config["film"]),
@@ -89,15 +98,15 @@ def main(rank, world_size, output_dir, args):
 
     try:
         best_epoch = np.argmin(np.load(forecast_config["output_dir"] + "/losses_0.npy"))
-        checkpoint = torch.load(
+        checkpoint = load_analysis_checkpoint(
             forecast_config["output_dir"] + "/epoch_{}".format(best_epoch)
         )
 
-    except:
+    except OSError:
         best_epoch = np.argmin(
             np.load("../results/" + forecast_config["output_dir"] + "/losses_0.npy")
         )
-        checkpoint = torch.load(
+        checkpoint = load_analysis_checkpoint(
             "../results/"
             + forecast_config["output_dir"]
             + "/epoch_{}".format(best_epoch)
@@ -120,7 +129,8 @@ def main(rank, world_size, output_dir, args):
             in_channels=forecast_config["in_channels"],
             out_channels=forecast_config["out_channels"],
             int_channels=forecast_config["int_channels"],
-            device="cuda",            gnp=bool(0),
+            device="cuda",
+            gnp=bool(0),
             decoder=forecast_config["decoder"],
             mode=forecast_config["mode"],
             film=bool(forecast_config["film"]),
@@ -140,7 +150,8 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="train",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,            frequency=args.frequency,
+            era5_mode=args.era5_mode,
+            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -153,7 +164,8 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="val",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,            frequency=args.frequency,
+            era5_mode=args.era5_mode,
+            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -163,7 +175,8 @@ def main(rank, world_size, output_dir, args):
             device="cuda",
             mode="test",
             lead_time=lead_time,
-            era5_mode=args.era5_mode,            frequency=args.frequency,
+            era5_mode=args.era5_mode,
+            frequency=args.frequency,
             diff=bool(args.diff),
             ic_path=path_to_context,
             finetune_step=lead_time,
@@ -223,7 +236,7 @@ def main(rank, world_size, output_dir, args):
         best_epoch = np.argmin(
             np.load(f"{args.output_dir}/forecast_{lead_time}/losses_0.npy")
         )
-        checkpoint = torch.load(
+        checkpoint = load_analysis_checkpoint(
             f"{args.output_dir}/forecast_{lead_time}/epoch_{best_epoch}"
         )
 
@@ -367,7 +380,7 @@ def main(rank, world_size, output_dir, args):
             best_epoch = np.argmin(
                 np.load(f"{args.output_dir}/forecast_{lead_time}/losses_0.npy")
             )
-            checkpoint = torch.load(
+            checkpoint = load_analysis_checkpoint(
                 f"{args.output_dir}/forecast_{lead_time}/epoch_{best_epoch}"
             )
             new_state_dict = OrderedDict()
@@ -382,6 +395,12 @@ def main(rank, world_size, output_dir, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--target_mode",
+        choices=["analysis"],
+        default="analysis",
+        help="Increment targets are unsupported in finetuning",
+    )
 
     parser.add_argument("--output_dir")
     parser.add_argument("--assimilation_model_path")

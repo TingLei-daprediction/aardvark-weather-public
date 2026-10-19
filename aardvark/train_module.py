@@ -34,6 +34,7 @@ from grid_config import (
     assert_grid_files_consistent,
 )
 from month_manifest import format_months, read_month_manifest
+from physical_metrics import require_even_validation
 
 
 sys.path.append("../npw/data")
@@ -146,6 +147,10 @@ def main(rank, world_size, output_dir, args):
         )
     if args.background_input == "raw" and args.mode != "assimilation":
         raise ValueError("raw background input is supported only for assimilation")
+    if args.target_mode == "increment" and args.mode != "assimilation":
+        raise ValueError(
+            "increment targets are supported only for monthly RTMA assimilation"
+        )
     weights_dir = args.weights_dir
     ddp_setup(rank, world_size, master_port, args.backend)
     if args.seed is not None:
@@ -217,6 +222,8 @@ def main(rank, world_size, output_dir, args):
             background_input=args.background_input,
             selected_months=args.assim_train_months_resolved,
             sample_stride=1,
+            target_mode=args.target_mode,
+            verify_increment_hashes=args.verify_increment_hashes,
         )
         val_dataset = WeatherDatasetAssimilation(
             device=device_name,
@@ -239,7 +246,40 @@ def main(rank, world_size, output_dir, args):
             background_input=args.background_input,
             selected_months=args.assim_val_months_resolved,
             sample_stride=args.assim_val_stride,
+            include_physical_targets=True,
+            target_mode=args.target_mode,
+            verify_increment_hashes=args.verify_increment_hashes,
         )
+        # Eval-only datasets are timestamps to evaluate, not fitting months.
+        if args.epoch > 0:
+            train_dataset.check_statistics_training_months()
+        if train_dataset.monthly:
+            overlap = set(train_dataset._month_keys()) & set(val_dataset._month_keys())
+            if overlap and not (
+                args.assim_train_months_resolved and args.assim_val_months_resolved
+            ):
+                print(
+                    "[WARN] assimilation training and validation month manifests overlap: "
+                    + " ".join(format_months(sorted(overlap)))
+                    + "; validation will not measure independent generalization.",
+                    flush=True,
+                )
+            if args.target_mode == "increment":
+                from month_manifest import parse_month
+
+                stats_months = {
+                    parse_month(value)
+                    for value in train_dataset.target_normalization["training_months"]
+                }
+                stats_overlap = stats_months & set(val_dataset._month_keys())
+                if stats_overlap - overlap:
+                    print(
+                        "[WARN] increment statistics and validation months overlap: "
+                        + " ".join(format_months(sorted(stats_overlap)))
+                        + "; validation will not measure independent generalization.",
+                        flush=True,
+                    )
+            require_even_validation(len(val_dataset), world_size, monthly_rtma=True)
 
     # Case 2: training processor
     elif args.mode == "forecast":
@@ -489,6 +529,14 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir")
     parser.add_argument("--mode")
     parser.add_argument("--weights_dir")
+    parser.add_argument(
+        "--target_mode", choices=["analysis", "increment"], default="analysis"
+    )
+    parser.add_argument(
+        "--verify_increment_hashes",
+        action="store_true",
+        help="Rehash monthly increment files at startup (otherwise verify recorded hashes and sizes)",
+    )
     parser.add_argument(
         "--background_input", choices=["normalized", "raw"], default="normalized"
     )

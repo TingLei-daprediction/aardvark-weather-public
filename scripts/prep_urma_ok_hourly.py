@@ -73,10 +73,14 @@ Use --background_only --grid_source files to add backgrounds without rewriting e
 import argparse
 import calendar
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import eccodes as ec
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "aardvark"))
+from increment_data import build_increment, sidecar_path, write_source_sidecar
 
 ERA5_MODE = "rtma_ok_sfc"
 FREQ_TAG = "1h"
@@ -97,6 +101,16 @@ CHANNELS = len(VAR_SPECS)
 def parse_args():
     p = argparse.ArgumentParser(
         description="URMA grib2 -> per-month hourly target + selectable background memmaps (RTMA OK)"
+    )
+    p.add_argument(
+        "--write_increments",
+        action="store_true",
+        help="Also write raw hourly analysis-minus-background products",
+    )
+    p.add_argument(
+        "--allow_legacy_inputs",
+        action="store_true",
+        help="Explicitly assume channel/grid order for existing analyses without sidecars",
     )
     p.add_argument(
         "--input_dir", required=True, help="Root dir containing <YYYYMMDD>/ day dirs"
@@ -353,6 +367,8 @@ def prescan(
 
 def main():
     args = parse_args()
+    if args.write_increments and args.background_mode != "hourly":
+        raise ValueError("--write_increments requires --background_mode hourly")
     if args.ges_pattern is None:
         args.ges_pattern = (
             "urma2p5.t{hour:02d}z.2dvarges_OK.grb2"
@@ -435,16 +451,21 @@ def main():
         )
         bg_path = era5_dir / f"{bg_stem}_{ERA5_MODE}_1_{year}-{month:02d}.memmap"
         background_frames = days * (24 if args.background_mode == "hourly" else 1)
+        # Publish only completed source products. Missing sidecars make interrupted rewrites fail closed.
+        tgt_temporary = Path(str(tgt_path) + ".tmp")
+        bg_temporary = Path(str(bg_path) + ".tmp")
         tgt = None
         if not args.background_only:
+            sidecar_path(tgt_path).unlink(missing_ok=True)
             tgt = np.memmap(
-                tgt_path,
+                tgt_temporary,
                 dtype="float32",
                 mode="w+",
                 shape=(days * FRAMES_PER_DAY, CHANNELS, nlon, nlat),
             )
+        sidecar_path(bg_path).unlink(missing_ok=True)
         bg = np.memmap(
-            bg_path,
+            bg_temporary,
             dtype="float32",
             mode="w+",
             shape=(background_frames, CHANNELS, nlon, nlat),
@@ -522,15 +543,40 @@ def main():
         del bg
         if tgt is not None:
             del tgt
+            os.replace(tgt_temporary, tgt_path)
+            write_source_sidecar(
+                tgt_path, (days * FRAMES_PER_DAY, CHANNELS, nlon, nlat), year, month
+            )
             print(
                 f"[OK] {year}-{month:02d}: {tgt_path.name} "
-                f"({days * FRAMES_PER_DAY}, {CHANNELS}, {nlon}, {nlat}), "
-                f"{bg_path.name} ({background_frames}, {CHANNELS}, {nlon}, {nlat})"
+                f"({days * FRAMES_PER_DAY}, {CHANNELS}, {nlon}, {nlat})"
             )
-        else:
-            print(
-                f"[OK] {year}-{month:02d}: {bg_path.name} "
-                f"({background_frames}, {CHANNELS}, {nlon}, {nlat})"
+        os.replace(bg_temporary, bg_path)
+        write_source_sidecar(
+            bg_path,
+            (background_frames, CHANNELS, nlon, nlat),
+            year,
+            month,
+            hourly=args.background_mode == "hourly",
+        )
+        print(
+            f"[OK] {year}-{month:02d}: {bg_path.name} "
+            f"({background_frames}, {CHANNELS}, {nlon}, {nlat})"
+        )
+        if args.write_increments:
+            increment_path = (
+                era5_dir
+                / f"increment_{ERA5_MODE}_1_{FREQ_TAG}_{year}-{month:02d}.memmap"
+            )
+            build_increment(
+                tgt_path,
+                bg_path,
+                increment_path,
+                (days * FRAMES_PER_DAY, CHANNELS, nlon, nlat),
+                year,
+                month,
+                allow_legacy=args.allow_legacy_inputs,
+                overwrite=True,
             )
 
     if args.write_norms:

@@ -10,6 +10,12 @@
 #   RECOMPUTE_TRAINING_NORMS=0 bash scripts/run_build_urma_ok_hourly_background.sh
 
 set -euo pipefail
+export TARGET_MODE="${TARGET_MODE:-analysis}"
+case "$TARGET_MODE" in
+  analysis|increment) ;;
+  *) echo "ERROR: TARGET_MODE must be analysis or increment" >&2; exit 1 ;;
+esac
+echo "Target mode: $TARGET_MODE; background mode: hourly"
 export BACKGROUND_INPUT="${BACKGROUND_INPUT:-normalized}"
 case "$BACKGROUND_INPUT" in
   normalized|raw) ;;
@@ -22,6 +28,10 @@ norms_script="${repo}/scripts/run_compute_rtma_ok_2022_norms.sbatch"
 prep_script="${repo}/scripts/run_prep_urma_ok_hourly_background.sbatch"
 normalize_script="${repo}/scripts/run_normalize_urma_ok_hourly_background.sbatch"
 diagnose_script="${repo}/scripts/run_diagnose_urma_ok_hourly_background.sbatch"
+increment_script="${repo}/scripts/run_build_urma_ok_increments.sbatch"
+if [[ "$TARGET_MODE" == increment ]]; then
+  [[ -f "$increment_script" ]] || { echo "ERROR: missing $increment_script" >&2; exit 1; }
+fi
 
 for required in "$norms_script" "$prep_script" "$normalize_script" "$diagnose_script"; do
   [[ -f "$required" ]] || { echo "ERROR: required script not found: $required"; exit 1; }
@@ -52,8 +62,16 @@ if [[ "$BACKGROUND_INPUT" == normalized ]]; then
 fi
 diagnose_submit=$(sbatch --parsable --dependency="afterok:${ready_job}" "$diagnose_script")
 diagnose_job=${diagnose_submit%%;*}
+ready_for_training_job="$diagnose_job"
+if [[ "$TARGET_MODE" == increment ]]; then
+  increment_submit=$(sbatch --parsable --dependency="afterok:${diagnose_job}" "$increment_script")
+  increment_job=${increment_submit%%;*}
+  ready_for_training_job="$increment_job"
+  echo "Submitted increment products/training statistics: $increment_job"
+  echo "Increment training may start only after job $increment_job succeeds."
+fi
 
 echo "Submitted 24-month hourly raw-background array: $prep_job"
 echo "Submitted hourly normalization job:             $normalize_job"
 echo "Submitted per-year leakage/quality gate:        $diagnose_job"
-echo "Training may start only after job $diagnose_job finishes successfully."
+echo "Training may start only after job $ready_for_training_job finishes successfully."

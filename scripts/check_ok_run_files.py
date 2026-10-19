@@ -49,10 +49,19 @@ from grid_config import (  # noqa: E402
     background_input_path,
     lat_weights_path,
     assert_grid_files_consistent,
+    increment_month_path,
 )
 from loader_utils_new import parse_time_freq, days_in_month  # noqa: E402
 
 from background_normalization import load_background_norms, validate_background_input
+from increment_data import (
+    load_increment_norms,
+    verify_increment_input,
+    verify_increment_sources,
+    validate_target_mode,
+    check_training_months,
+)
+from month_manifest import read_month_manifest, format_months
 
 OBS_VARS = ["tas", "sh", "psl", "u", "v"]
 
@@ -162,6 +171,12 @@ def check_memmap(path, expected_frames, per_frame_bytes, what):
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
+        "--target_mode",
+        choices=["analysis", "increment"],
+        help="Override parsed target mode",
+    )
+    p.add_argument("--verify_increment_hashes", action="store_true")
+    p.add_argument(
         "--train_script",
         default=os.path.join(REPO, "training", "new-tl-train-encoder-rtma_ok_sfc.sh"),
     )
@@ -169,6 +184,7 @@ def main():
 
     print(f"Training script: {args.train_script}")
     varmap, flags = parse_train_script(args.train_script)
+    target_mode = args.target_mode or flags.get("target_mode", "analysis")
 
     data_path = flags.get("data_path", "")
     aux_path = flags.get("aux_data_path", "")
@@ -221,6 +237,9 @@ def main():
             "val_end_date",
         )
     }
+    if not all(d.values()):
+        print(f"\nFAILED: {len(errors)} date error(s); fix the training date flags")
+        sys.exit(1)
     months = []
     if all(d.values()):
         for a, b in [
@@ -306,7 +325,15 @@ def main():
     if background_mode == "hourly" and time_freq != "1H":
         err("--background_mode hourly requires --time_freq 1H")
     background_input = flags.get("background_input", "normalized")
+    increment_metadata = None
     try:
+        validate_target_mode(
+            target_mode,
+            flags.get("obs_set") == "rtma_surface",
+            time_freq,
+            background_mode,
+            flags.get("diff", "0") != "0",
+        )
         validate_background_input(
             background_input,
             flags.get("obs_set") == "rtma_surface" and time_freq in ("1H", "15min"),
@@ -315,6 +342,16 @@ def main():
         load_background_norms(
             aux_path, era5_mode, ch, background_input, background_mode
         )
+        if target_mode == "increment":
+            _, _, increment_metadata = load_increment_norms(aux_path, era5_mode, ch)
+            train_manifest = flags.get("assim_train_months_file")
+            train_months = (
+                read_month_manifest(train_manifest)
+                if train_manifest
+                else month_range(d["train_start_date"], d["train_end_date"])
+            )
+            if flags.get("epoch", "1") != "0":
+                check_training_months(format_months(train_months), increment_metadata)
     except (ValueError, OSError) as exc:
         err(str(exc))
         sys.exit(1)
@@ -335,6 +372,35 @@ def main():
             ch * grid_bytes,
             f"{background_mode} background {y}-{m:02d}",
         )
+        if increment_metadata is not None:
+            path = increment_month_path(data_path, era5_mode, freq_tag, y, m)
+            try:
+                product = verify_increment_input(
+                    path,
+                    (frames, ch, nlon, nlat),
+                    y,
+                    m,
+                    increment_metadata,
+                    args.verify_increment_hashes,
+                )
+                verify_increment_sources(
+                    product,
+                    era5_month_path(data_path, era5_mode, freq_tag, y, m),
+                    (
+                        background_input_path(
+                            data_path, era5_mode, y, m, "hourly", "raw"
+                        )
+                        if background_input == "raw"
+                        else None
+                    ),
+                    (frames, ch, nlon, nlat),
+                    y,
+                    m,
+                    args.verify_increment_hashes,
+                )
+                ok(f"increment {y}-{m:02d}: sidecar, recorded hash and size verified")
+            except (ValueError, OSError, KeyError) as exc:
+                err(str(exc))
 
     print("\n== Surface observations ==")
     for var in OBS_VARS:

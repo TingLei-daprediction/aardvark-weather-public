@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+work/increment-check-*/
+work/increment_test.log

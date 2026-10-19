@@ -48,6 +48,9 @@ DEFAULT_GRID_CONFIG = {
         "era5_memmap": "era5/era5_{era5_mode}_1_{freq}_{year}.memmap",
         # Per-month files used by the sub-daily (monthly) rtma_surface path.
         "era5_month": "era5/era5_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap",
+        "increment_month": "era5/increment_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap",
+        "increment_mean": "norm_factors/mean_increment_{era5_mode}_1.npy",
+        "increment_std": "norm_factors/std_increment_{era5_mode}_1.npy",
         "background_month": "era5/background_{era5_mode}_1_{year}-{month:02d}.memmap",
         "background_hourly_month": "era5/background_hourly_{era5_mode}_1_{year}-{month:02d}.memmap",
         "background_raw_month": "era5/background_raw_{era5_mode}_1_{year}-{month:02d}.memmap",
@@ -163,6 +166,23 @@ def background_month_path(data_path, era5_mode, year, month):
     return _data_file(
         data_path, "background_month", era5_mode=era5_mode, year=year, month=month
     )
+
+
+def increment_month_path(data_path, era5_mode, freq, year, month):
+    return _data_file(
+        data_path,
+        "increment_month",
+        era5_mode=era5_mode,
+        freq=freq,
+        year=year,
+        month=month,
+    )
+
+
+def increment_norm_path(data_path, era5_mode, statistic):
+    if statistic not in ("mean", "std"):
+        raise ValueError("increment statistic must be mean or std")
+    return _data_file(data_path, "increment_" + statistic, era5_mode=era5_mode)
 
 
 def background_hourly_month_path(data_path, era5_mode, year, month):

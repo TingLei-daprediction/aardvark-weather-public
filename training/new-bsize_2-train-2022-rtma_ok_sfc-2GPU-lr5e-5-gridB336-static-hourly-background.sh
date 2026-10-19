@@ -25,6 +25,12 @@
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 unset PYTHONPATH
 set -euo pipefail
+export TARGET_MODE="${TARGET_MODE:-analysis}"
+case "$TARGET_MODE" in
+  analysis|increment) ;;
+  *) echo "ERROR: TARGET_MODE must be analysis or increment" >&2; exit 1 ;;
+esac
+echo "Target mode: $TARGET_MODE"
 
 repo="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public"
 rundir="${repo}/training"
@@ -37,6 +43,9 @@ val_months_file="${rundir}/rtma_ok_val_months_2023.txt"
 output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output-train2022-val2023-hourly-static-gridB336-bsize2/"
 if [[ "${BACKGROUND_INPUT:-normalized}" == raw ]]; then
   output_dir="${output_dir%/}-raw/"
+fi
+if [[ "$TARGET_MODE" == increment ]]; then
+  output_dir="${output_dir%/}-increment/"
 fi
 resume_checkpoint="${RESUME_CHECKPOINT:-}"
 background_mode="hourly"
@@ -78,6 +87,7 @@ python ../scripts/check_ok_run_files.py --train_script "$script_path"
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --target_mode "${TARGET_MODE:-analysis}" \
   --background_input "${BACKGROUND_INPUT:-normalized}" \
   --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   "${resume_args[@]}" \

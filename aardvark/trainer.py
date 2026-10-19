@@ -3,6 +3,8 @@ import sys
 import subprocess
 import json
 from background_normalization import check_checkpoint_normalization, compare_manifests
+from increment_data import atomic_json, check_target_checkpoint
+from physical_metrics import physical_metric_sums, finalize_physical_metrics
 
 import numpy as np
 import torch
@@ -55,6 +57,17 @@ class DDPTrainer:
             train_loader.dataset, "background_normalization", None
         )
         self.background_norm_manifest = background_norm_manifest
+        self.target_normalization = getattr(
+            train_loader.dataset, "target_normalization", None
+        )
+        check_target_checkpoint(
+            (
+                {"target_normalization": self.target_normalization}
+                if self.target_normalization
+                else {}
+            ),
+            getattr(val_loader.dataset, "target_normalization", None),
+        )
         val_normalization = getattr(
             val_loader.dataset, "background_normalization", None
         )
@@ -65,6 +78,15 @@ class DDPTrainer:
                 )
             compare_manifests(self.background_normalization, val_normalization)
         checkpoint = self._load_weights_if_provided(weights_path)
+        if self.rank == 0 and self.target_normalization is not None:
+            target_path = os.path.join(save_path, "target_normalization.json")
+            if os.path.isfile(target_path):
+                with open(target_path, encoding="utf-8") as stream:
+                    check_target_checkpoint(
+                        {"target_normalization": json.load(stream)},
+                        self.target_normalization,
+                    )
+            atomic_json(target_path, self.target_normalization)
         if self.rank == 0 and self.background_normalization is not None:
             manifest_path = os.path.join(save_path, "background_normalization.json")
             if os.path.exists(manifest_path):
@@ -101,6 +123,11 @@ class DDPTrainer:
             return None
         if not os.path.exists(weights_path):
             if (
+                self.target_normalization
+                and self.target_normalization["target_mode"] == "increment"
+            ):
+                raise FileNotFoundError(weights_path)
+            if (
                 self.background_normalization is not None
                 and self.background_normalization["background_input"] == "raw"
             ):
@@ -108,6 +135,11 @@ class DDPTrainer:
             print(f"Warning: weights path not found, skipping load: {weights_path}")
             return None
         if os.path.isdir(weights_path):
+            if (
+                self.target_normalization
+                and self.target_normalization["target_mode"] == "increment"
+            ):
+                raise ValueError("increment weights_dir must be a checkpoint file")
             if (
                 self.background_normalization is not None
                 and self.background_normalization["background_input"] == "raw"
@@ -125,6 +157,7 @@ class DDPTrainer:
             self.background_normalization,
             weights_path,
             self.background_norm_manifest,
+            target_normalization=self.target_normalization,
         )
         if isinstance(checkpoint, dict):
             state_dict = (
@@ -197,6 +230,8 @@ class DDPTrainer:
         }
         if self.background_normalization is not None:
             state["background_normalization"] = self.background_normalization
+        if self.target_normalization is not None:
+            state["target_normalization"] = self.target_normalization
         if hasattr(self, "scheduler"):
             state["scheduler_state_dict"] = self.scheduler.state_dict()
         return state
@@ -217,6 +252,16 @@ class DDPTrainer:
         mae = []
         lf = []
         lf_unnorm = []
+        dataset = self.val_loader.dataset
+        physical_rtma = getattr(dataset, "monthly", False) and not getattr(
+            dataset, "diff", False
+        )
+        if physical_rtma and not getattr(dataset, "include_physical_targets", False):
+            raise ValueError(
+                "monthly RTMA physical validation requires include_physical_targets=True "
+                "on the validation dataset"
+            )
+        physical_sums = None
 
         with torch.no_grad():
             for count, task in enumerate(self.val_loader):
@@ -241,6 +286,21 @@ class DDPTrainer:
                     .item()
                 )
                 lf.append(l)
+
+                if physical_rtma:
+                    physical_prediction = dataset.physical_analysis(out, task)
+                    physical_truth = task["physical_analysis_current"]
+                    physical_background = dataset.physical_background(task)
+                    to_numpy = lambda value: value.detach().cpu().numpy()
+                    sums = physical_metric_sums(
+                        to_numpy(physical_prediction),
+                        to_numpy(physical_truth),
+                        to_numpy(physical_background),
+                    )
+                    physical_sums = (
+                        sums if physical_sums is None else physical_sums + sums
+                    )
+                    continue
 
                 try:
                     if hasattr(self.train_loader.dataset, "unnorm_base_context"):
@@ -336,6 +396,81 @@ class DDPTrainer:
                     np.concatenate(stations, axis=0),
                 )
         log_loss = np.nanmean(np.array(lf))
+
+        if physical_rtma:
+            if physical_sums is None:
+                raise ValueError("empty monthly RTMA validation set")
+            # NCCL requires CUDA tensors; Gloo can aggregate on CPU.
+            metric_device = (
+                out.device
+                if torch.distributed.get_backend() == "nccl"
+                else torch.device("cpu")
+            )
+            distributed_sums = torch.as_tensor(
+                physical_sums, dtype=torch.float64, device=metric_device
+            )
+            torch.distributed.all_reduce(
+                distributed_sums, op=torch.distributed.ReduceOp.SUM
+            )
+            metrics = finalize_physical_metrics(distributed_sums.cpu().numpy())
+            metrics.update(
+                epoch=epoch,
+                target_mode=dataset.target_mode,
+                spatial_weighting="uniform",
+                channel_order=self.background_normalization["channel_order"][
+                    dataset.var_start : dataset.var_end
+                ],
+            )
+            if self.rank == 0:
+                atomic_json(
+                    os.path.join(self.save_path, "physical_analysis_metrics.json"),
+                    metrics,
+                )
+                atomic_json(
+                    os.path.join(
+                        self.save_path, f"physical_analysis_metrics_epoch_{epoch}.json"
+                    ),
+                    metrics,
+                )
+                print("[physical analysis RMSE] " + json.dumps(metrics), flush=True)
+            log_loss_unnorm = np.asarray(metrics["rmse"])
+            if log_loss < self.best_loss or self.epoch == 0:
+                if dataset.target_mode == "increment":
+                    outputs = {
+                        "unnorm_increment_preds": dataset.unnorm_pred(
+                            out[..., : dataset.var_end - dataset.var_start]
+                        ),
+                        "unnorm_increment_targets": dataset.unnorm_pred(
+                            task["y_target"]
+                        ),
+                        "unnorm_analysis_preds": physical_prediction,
+                        "unnorm_analysis_targets": physical_truth,
+                    }
+                else:
+                    outputs = {
+                        "unnorm_preds": physical_prediction,
+                        "unnorm_targets": physical_truth,
+                    }
+                for name, value in outputs.items():
+                    np.save(
+                        os.path.join(self.save_path, f"{name}_{self.rank}.npy"),
+                        value.detach().cpu().numpy(),
+                    )
+            if self.rank == 0 and self.epoch % 5 == 0:
+                prefix = (
+                    "normalized_increment_"
+                    if dataset.target_mode == "increment"
+                    else ""
+                )
+                np.save(
+                    os.path.join(self.save_path, prefix + "preds_eval.npy"),
+                    out.detach().cpu().numpy(),
+                )
+                np.save(
+                    os.path.join(self.save_path, prefix + "y_target_eval.npy"),
+                    task["y_target"].detach().cpu().numpy(),
+                )
+            return log_loss, log_loss_unnorm
 
         if log_loss < self.best_loss:
             np.save(
@@ -563,6 +698,7 @@ class DDPTrainerE2E:
             )
             return
         checkpoint = torch.load(weights_path, map_location="cpu")
+        check_target_checkpoint(checkpoint, None)
         if isinstance(checkpoint, dict):
             state_dict = (
                 checkpoint.get("model_state_dict")

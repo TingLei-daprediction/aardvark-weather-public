@@ -151,8 +151,15 @@ def compare_manifests(expected, current):
 
 
 def check_checkpoint_normalization(
-    checkpoint, current, checkpoint_path, legacy_manifest=None
+    checkpoint,
+    current,
+    checkpoint_path,
+    legacy_manifest=None,
+    target_normalization=None,
 ):
+    from increment_data import check_target_checkpoint
+
+    check_target_checkpoint(checkpoint, target_normalization)
     if current is None:
         return
     expected = (

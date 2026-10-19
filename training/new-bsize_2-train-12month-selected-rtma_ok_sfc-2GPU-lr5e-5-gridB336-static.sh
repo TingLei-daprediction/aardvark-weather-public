@@ -31,6 +31,12 @@
 source /scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-miniconda3/bin/activate aardvark-env
 unset PYTHONPATH
 set -euo pipefail
+export TARGET_MODE="${TARGET_MODE:-analysis}"
+case "$TARGET_MODE" in
+  analysis|increment) ;;
+  *) echo "ERROR: TARGET_MODE must be analysis or increment" >&2; exit 1 ;;
+esac
+echo "Target mode: $TARGET_MODE"
 
 rundir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/dr-aardvark/aardvark-weather-public/training/"
 cd "$rundir"
@@ -43,6 +49,10 @@ case "$background_mode" in
 esac
 
 output_dir="/scratch3/NCEPDEV/fv3-cam/Ting.Lei/aardvark-data/dr-rtma/OK-output-train2022-val2023-${background_mode}-static-gridB336-bsize2/"
+if [[ "$TARGET_MODE" == increment ]]; then
+  [[ "$background_mode" == hourly ]] || { echo "ERROR: increment requires BACKGROUND_MODE=hourly" >&2; exit 1; }
+  output_dir="${output_dir%/}-increment/"
+fi
 if [[ "${BACKGROUND_INPUT:-normalized}" == raw ]]; then
   output_dir="${output_dir%/}-raw/"
 fi
@@ -92,6 +102,7 @@ fi
 
 python ../aardvark/train_module.py \
   --output_dir "$output_dir" \
+  --target_mode "${TARGET_MODE:-analysis}" \
   --background_input "${BACKGROUND_INPUT:-normalized}" \
   --background_norm_manifest "${BACKGROUND_NORM_MANIFEST:-}" \
   "${resume_args[@]}" \

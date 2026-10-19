@@ -112,7 +112,8 @@ def main(rank, world_size, output_dir, args):
         end_date="2017-12-31",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",        var_start=0,
+        mode="train",
+        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -128,7 +129,8 @@ def main(rank, world_size, output_dir, args):
         end_date="2019-12-21",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",        var_start=0,
+        mode="train",
+        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -143,7 +145,8 @@ def main(rank, world_size, output_dir, args):
         end_date="2018-12-21",
         lead_time=lead_time,
         era5_mode=era5_mode,
-        mode="train",        var_start=0,
+        mode="train",
+        var_start=0,
         var_end=out_channels,
         diff=bool(0),
         two_frames=bool(0),
@@ -201,6 +204,12 @@ def main(rank, world_size, output_dir, args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--target_mode",
+        choices=["analysis"],
+        default="analysis",
+        help="Increment targets are unsupported in E2E",
+    )
     parser.add_argument("--output_dir")
     parser.add_argument("--loss")
     parser.add_argument("--batch_size", type=int, default=3)

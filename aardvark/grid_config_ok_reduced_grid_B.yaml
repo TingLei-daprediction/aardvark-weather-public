@@ -65,6 +65,9 @@ grid_files:
 # prep_urma_ok_hourly.py all hardcode the "_1" token -- an "_ok" suffix here would point the
 # runtime at files no preprocessing script writes.
 data_files:
+  increment_month: "urma/increment_{era5_mode}_1_{freq}_{year}-{month:02d}.memmap"
+  increment_mean: "norm_factors/mean_increment_{era5_mode}_1.npy"
+  increment_std: "norm_factors/std_increment_{era5_mode}_1.npy"
   # OK data uses the "urma" naming token (source is URMA, not ERA5). All names below must
   # match what prep_urma_ok_hourly.py --name_root urma / normalize_background.py --subdir urma
   # write. norm files carry no token (mean_{era5_mode}_1.npy).
